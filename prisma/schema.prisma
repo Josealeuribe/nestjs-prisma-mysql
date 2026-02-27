@@ -1,0 +1,572 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model bodega {
+  id_bodega                                   Int                   @id @default(autoincrement()) @db.UnsignedInt
+  nombre_bodega                               String                @db.VarChar(100)
+  direccion                                   String                @db.VarChar(255)
+  id_municipio                                Int                   @db.UnsignedInt
+  municipios                                  municipios            @relation(fields: [id_municipio], references: [id_municipio], map: "fk_bodega_municipio")
+  bodegas_por_usuario                         bodegas_por_usuario[]
+  compras                                     compras[]
+  cotizacion                                  cotizacion[]
+  existencias                                 existencias[]
+  orden_venta                                 orden_venta[]
+  traslado_traslado_id_bodega_destinoTobodega traslado[]            @relation("traslado_id_bodega_destinoTobodega")
+  traslado_traslado_id_bodega_origenTobodega  traslado[]            @relation("traslado_id_bodega_origenTobodega")
+
+  @@index([id_municipio], map: "fk_bodega_municipio")
+}
+
+model bodegas_por_usuario {
+  id_usuario Int     @db.UnsignedInt
+  id_bodega  Int     @db.UnsignedInt
+  bodega     bodega  @relation(fields: [id_bodega], references: [id_bodega], onDelete: Cascade, map: "fk_bpu_bodega")
+  usuario    usuario @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade, map: "fk_bpu_usuario")
+
+  @@id([id_usuario, id_bodega])
+  @@index([id_bodega], map: "fk_bpu_bodega")
+}
+
+model categoria_producto {
+  id_categoria_producto Int        @id @default(autoincrement()) @db.UnsignedInt
+  nombre_categoria      String     @unique(map: "nombre_categoria") @db.VarChar(100)
+  producto              producto[]
+}
+
+model cliente {
+  id_cliente      Int              @id @default(autoincrement()) @db.UnsignedInt
+  codigo_cliente  String?          @unique(map: "codigo_cliente") @db.VarChar(20)
+  nombre_cliente  String           @db.VarChar(150)
+  email           String?          @unique(map: "email") @db.VarChar(100)
+  telefono        String?          @db.VarChar(20)
+  direccion       String?          @db.VarChar(255)
+  num_documento   String           @unique(map: "num_documento") @db.VarChar(50)
+  id_tipo_cliente Int              @db.UnsignedInt
+  id_municipio    Int              @db.UnsignedInt
+  id_tipo_doc     Int              @db.UnsignedInt
+  municipios      municipios       @relation(fields: [id_municipio], references: [id_municipio], map: "fk_cliente_municipio")
+  tipo_cliente    tipo_cliente     @relation(fields: [id_tipo_cliente], references: [id_tipo_cliente], map: "fk_cliente_tipo_cliente")
+  tipo_documento  tipo_documento   @relation(fields: [id_tipo_doc], references: [id_tipo_doc], map: "fk_cliente_tipo_doc")
+  cotizacion      cotizacion[]
+  factura         factura[]
+  orden_venta     orden_venta[]
+  remision_venta  remision_venta[]
+
+  @@index([id_municipio], map: "fk_cliente_municipio")
+  @@index([id_tipo_cliente], map: "fk_cliente_tipo_cliente")
+  @@index([id_tipo_doc], map: "fk_cliente_tipo_doc")
+}
+
+model compras {
+  id_compra          Int               @id @default(autoincrement()) @db.UnsignedInt
+  codigo_compra      String            @unique(map: "codigo_compra") @db.VarChar(20)
+  fecha_solicitud    DateTime          @db.Date
+  id_proveedor       Int               @db.UnsignedInt
+  id_termino_pago    Int               @db.UnsignedInt
+  descripcion        String?           @db.Text
+  subtotal           Decimal           @default(0.00) @db.Decimal(10, 2)
+  total_iva          Decimal           @default(0.00) @db.Decimal(10, 2)
+  total              Decimal           @default(0.00) @db.Decimal(10, 2)
+  id_estado_compra   Int               @db.UnsignedInt
+  id_usuario_creador Int               @db.UnsignedInt
+  id_bodega          Int               @db.UnsignedInt
+  bodega             bodega            @relation(fields: [id_bodega], references: [id_bodega], map: "fk_compra_bodega")
+  estado_compra      estado_compra     @relation(fields: [id_estado_compra], references: [id_estado_compra], map: "fk_compra_estado")
+  proveedor          proveedor         @relation(fields: [id_proveedor], references: [id_proveedor], map: "fk_compra_proveedor")
+  termino_pago       termino_pago      @relation(fields: [id_termino_pago], references: [id_termino_pago], map: "fk_compra_termino_pago")
+  usuario            usuario           @relation(fields: [id_usuario_creador], references: [id_usuario], map: "fk_compra_usuario_creador")
+  detalle_compra     detalle_compra[]
+  remision_compra    remision_compra[]
+
+  @@index([id_bodega], map: "fk_compra_bodega")
+  @@index([id_estado_compra], map: "fk_compra_estado")
+  @@index([id_proveedor], map: "fk_compra_proveedor")
+  @@index([id_termino_pago], map: "fk_compra_termino_pago")
+  @@index([id_usuario_creador], map: "fk_compra_usuario_creador")
+  @@index([fecha_solicitud], map: "idx_compras_fecha")
+}
+
+model cotizacion {
+  id_cotizacion        Int                  @id @default(autoincrement()) @db.UnsignedInt
+  codigo_cotizacion    String?              @unique(map: "codigo_cotizacion") @db.VarChar(20)
+  fecha                DateTime             @db.Date
+  fecha_vencimiento    DateTime             @db.Date
+  id_cliente           Int                  @db.UnsignedInt
+  id_bodega            Int                  @db.UnsignedInt
+  id_usuario_creador   Int                  @db.UnsignedInt
+  id_estado_cotizacion Int                  @db.UnsignedInt
+  observaciones        String?              @db.VarChar(255)
+  bodega               bodega               @relation(fields: [id_bodega], references: [id_bodega], map: "fk_cotizacion_bodega")
+  cliente              cliente              @relation(fields: [id_cliente], references: [id_cliente], map: "fk_cotizacion_cliente")
+  estado_cotizacion    estado_cotizacion    @relation(fields: [id_estado_cotizacion], references: [id_estado_cotizacion], map: "fk_cotizacion_estado")
+  usuario              usuario              @relation(fields: [id_usuario_creador], references: [id_usuario], map: "fk_cotizacion_usuario")
+  detalle_cotizacion   detalle_cotizacion[]
+  orden_venta          orden_venta?
+
+  @@index([id_estado_cotizacion], map: "fk_cotizacion_estado")
+  @@index([id_usuario_creador], map: "fk_cotizacion_usuario")
+  @@index([id_bodega], map: "idx_cotizacion_bodega")
+  @@index([id_cliente], map: "idx_cotizacion_cliente")
+  @@index([fecha], map: "idx_cotizacion_fecha")
+}
+
+model departamentos {
+  id_departamento     Int          @id @default(autoincrement()) @db.UnsignedInt
+  nombre_departamento String       @db.VarChar(100)
+  id_pais             Int          @db.UnsignedInt
+  paises              paises       @relation(fields: [id_pais], references: [id_pais], map: "fk_departamento_pais")
+  municipios          municipios[]
+
+  @@unique([id_pais, nombre_departamento], map: "uq_departamento_pais")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model detalle_compra {
+  id_compra       Int      @db.UnsignedInt
+  id_producto     Int      @db.UnsignedInt
+  cantidad        Decimal  @db.Decimal(10, 2)
+  precio_unitario Decimal  @db.Decimal(10, 2)
+  id_iva          Int      @db.UnsignedInt
+  compras         compras  @relation(fields: [id_compra], references: [id_compra], onDelete: Cascade, map: "fk_dc_compra")
+  iva             iva      @relation(fields: [id_iva], references: [id_iva], map: "fk_dc_iva")
+  producto        producto @relation(fields: [id_producto], references: [id_producto], map: "fk_dc_producto")
+
+  @@id([id_compra, id_producto])
+  @@index([id_iva], map: "fk_dc_iva")
+  @@index([id_producto], map: "fk_dc_producto")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model detalle_cotizacion {
+  id_detalle_cotizacion Int        @id @default(autoincrement()) @db.UnsignedInt
+  id_cotizacion         Int        @db.UnsignedInt
+  id_producto           Int        @db.UnsignedInt
+  cantidad              Decimal    @db.Decimal(10, 2)
+  precio_unitario       Decimal    @db.Decimal(10, 2)
+  id_iva                Int?       @db.UnsignedInt
+  iva_porcentaje        Decimal?   @db.Decimal(5, 2)
+  cotizacion            cotizacion @relation(fields: [id_cotizacion], references: [id_cotizacion], onDelete: Cascade, map: "fk_det_cotizacion_cotizacion")
+  iva                   iva?       @relation(fields: [id_iva], references: [id_iva], onDelete: Restrict, map: "fk_det_cotizacion_iva")
+  producto              producto   @relation(fields: [id_producto], references: [id_producto], map: "fk_det_cotizacion_producto")
+
+  @@unique([id_cotizacion, id_producto], map: "uq_cot_prod")
+  @@index([id_iva], map: "fk_det_cotizacion_iva")
+  @@index([id_cotizacion], map: "idx_det_cotizacion_cot")
+  @@index([id_producto], map: "idx_det_cotizacion_prod")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model detalle_orden_venta {
+  id_orden_detalle_venta Int         @id @default(autoincrement()) @db.UnsignedInt
+  id_orden_venta         Int         @db.UnsignedInt
+  id_producto            Int         @db.UnsignedInt
+  cantidad               Decimal     @db.Decimal(10, 2)
+  precio_unitario        Decimal     @db.Decimal(10, 2)
+  orden_venta            orden_venta @relation(fields: [id_orden_venta], references: [id_orden_venta], onDelete: Cascade, map: "fk_dov_orden")
+  producto               producto    @relation(fields: [id_producto], references: [id_producto], map: "fk_dov_producto")
+
+  @@unique([id_orden_venta, id_producto], map: "uq_dov_orden_producto")
+  @@index([id_orden_venta], map: "idx_dov_orden")
+  @@index([id_producto], map: "idx_dov_producto")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model detalle_remision_compra {
+  id_detalle_remision_compra Int             @id @default(autoincrement()) @db.UnsignedInt
+  id_remision_compra         Int             @db.UnsignedInt
+  id_producto                Int             @db.UnsignedInt
+  cantidad                   Decimal         @db.Decimal(10, 2)
+  precio_unitario            Decimal         @db.Decimal(10, 2)
+  id_iva                     Int             @db.UnsignedInt
+  lote                       String?         @db.VarChar(50)
+  fecha_vencimiento          DateTime?       @db.Date
+  iva                        iva             @relation(fields: [id_iva], references: [id_iva], map: "fk_drc_iva")
+  producto                   producto        @relation(fields: [id_producto], references: [id_producto], map: "fk_drc_producto")
+  remision_compra            remision_compra @relation(fields: [id_remision_compra], references: [id_remision_compra], onDelete: Cascade, map: "fk_drc_remision")
+
+  @@index([id_iva], map: "fk_drc_iva")
+  @@index([id_producto], map: "idx_drc_producto")
+  @@index([id_remision_compra], map: "idx_drc_remision")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model detalle_remision_venta {
+  id_detalle_remision_venta Int            @id @default(autoincrement()) @db.UnsignedInt
+  id_remision_venta         Int            @db.UnsignedInt
+  id_existencia             Int            @db.UnsignedInt
+  cantidad                  Decimal        @db.Decimal(10, 2)
+  precio_unitario           Decimal        @db.Decimal(10, 2)
+  iva                       Decimal?       @db.Decimal(5, 2)
+  existencias               existencias    @relation(fields: [id_existencia], references: [id_existencia], map: "fk_drv_existencia")
+  remision_venta            remision_venta @relation(fields: [id_remision_venta], references: [id_remision_venta], onDelete: Cascade, map: "fk_drv_remision")
+
+  @@index([id_existencia], map: "idx_drv_existencia")
+  @@index([id_remision_venta], map: "idx_drv_remision")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model detalle_traslado {
+  id_detalle    Int         @id @default(autoincrement()) @db.UnsignedInt
+  id_traslado   Int         @db.UnsignedInt
+  id_existencia Int         @db.UnsignedInt
+  cantidad      Decimal     @db.Decimal(10, 2)
+  existencias   existencias @relation(fields: [id_existencia], references: [id_existencia], map: "fk_detalle_existencia")
+  traslado      traslado    @relation(fields: [id_traslado], references: [id_traslado], onDelete: Cascade, map: "fk_detalle_traslado")
+
+  @@unique([id_traslado, id_existencia], map: "uq_detalle_traslado_existencia")
+  @@index([id_existencia], map: "idx_detalle_existencia")
+  @@index([id_traslado], map: "idx_detalle_traslado")
+}
+
+model estado_compra {
+  id_estado_compra Int       @id @default(autoincrement()) @db.UnsignedInt
+  nombre_estado    String    @unique(map: "nombre_estado") @db.VarChar(30)
+  compras          compras[]
+}
+
+model estado_cotizacion {
+  id_estado_cotizacion Int          @id @default(autoincrement()) @db.UnsignedInt
+  nombre_estado        String       @unique(map: "nombre_estado") @db.VarChar(30)
+  cotizacion           cotizacion[]
+}
+
+model estado_factura {
+  id_estado_factura     Int       @id @default(autoincrement()) @db.UnsignedInt
+  nombre_estado_factura String    @unique(map: "nombre_estado_factura") @db.VarChar(50)
+  factura               factura[]
+}
+
+model estado_orden_venta {
+  id_estado_orden_venta Int           @id @default(autoincrement()) @db.UnsignedInt
+  nombre_estado         String        @unique(map: "nombre_estado") @db.VarChar(50)
+  orden_venta           orden_venta[]
+}
+
+model estado_remision_compra {
+  id_estado_remision_compra Int               @id @default(autoincrement()) @db.UnsignedInt
+  nombre_estado             String            @unique(map: "nombre_estado") @db.VarChar(50)
+  remision_compra           remision_compra[]
+}
+
+model estado_remision_venta {
+  id_estado_remision_venta Int              @id @default(autoincrement()) @db.UnsignedInt
+  nombre_estado            String           @unique(map: "nombre_estado") @db.VarChar(50)
+  remision_venta           remision_venta[]
+}
+
+model estado_traslado {
+  id_estado_traslado Int        @id @default(autoincrement()) @db.UnsignedInt
+  nombre_estado      String     @unique(map: "nombre_estado") @db.VarChar(30)
+  traslado           traslado[]
+}
+
+model existencias {
+  id_existencia          Int                      @id @default(autoincrement()) @db.UnsignedInt
+  id_producto            Int                      @db.UnsignedInt
+  id_bodega              Int                      @db.UnsignedInt
+  nota                   String?                  @db.VarChar(255)
+  cantidad               Decimal                  @default(0.00) @db.Decimal(10, 2)
+  fecha_vencimiento      DateTime?                @db.Date
+  lote                   String?                  @db.VarChar(50)
+  detalle_remision_venta detalle_remision_venta[]
+  detalle_traslado       detalle_traslado[]
+  bodega                 bodega                   @relation(fields: [id_bodega], references: [id_bodega], map: "fk_existencias_bodega")
+  producto               producto                 @relation(fields: [id_producto], references: [id_producto], map: "fk_existencias_producto")
+
+  @@unique([id_producto, id_bodega, lote, fecha_vencimiento], map: "uq_existencias")
+  @@index([id_bodega], map: "fk_existencias_bodega")
+}
+
+model factura {
+  id_factura        Int              @id @default(autoincrement()) @db.UnsignedInt
+  codigo_factura    String           @unique(map: "codigo_factura") @db.VarChar(20)
+  fecha_factura     DateTime         @db.Date
+  fecha_vencimiento DateTime?        @db.Date
+  total             Decimal          @db.Decimal(10, 2)
+  nota              String?          @db.VarChar(255)
+  id_cliente        Int              @db.UnsignedInt
+  id_estado_factura Int              @db.UnsignedInt
+  cliente           cliente          @relation(fields: [id_cliente], references: [id_cliente], map: "fk_factura_cliente")
+  estado_factura    estado_factura   @relation(fields: [id_estado_factura], references: [id_estado_factura], map: "fk_factura_estado")
+  pagos_abonos      pagos_abonos[]
+  remision_venta    remision_venta[]
+
+  @@index([id_estado_factura], map: "fk_factura_estado")
+  @@index([id_cliente], map: "idx_factura_cliente")
+  @@index([fecha_factura], map: "idx_factura_fecha")
+}
+
+model iva {
+  id_iva                  Int                       @id @default(autoincrement()) @db.UnsignedInt
+  porcentaje              Decimal                   @unique(map: "porcentaje") @db.Decimal(5, 2)
+  detalle_compra          detalle_compra[]
+  detalle_cotizacion      detalle_cotizacion[]
+  detalle_remision_compra detalle_remision_compra[]
+  producto                producto[]
+}
+
+model metodo_pago {
+  id_metodo     Int            @id @default(autoincrement()) @db.UnsignedInt
+  nombre_metodo String         @unique(map: "nombre_metodo") @db.VarChar(100)
+  pagos_abonos  pagos_abonos[]
+}
+
+model municipios {
+  id_municipio     Int           @id @default(autoincrement()) @db.UnsignedInt
+  nombre_municipio String        @db.VarChar(100)
+  id_departamento  Int           @db.UnsignedInt
+  bodega           bodega[]
+  cliente          cliente[]
+  departamentos    departamentos @relation(fields: [id_departamento], references: [id_departamento], map: "fk_municipio_departamento")
+  proveedor        proveedor[]
+
+  @@unique([id_departamento, nombre_municipio], map: "uq_municipio_depto")
+}
+
+model orden_venta {
+  id_orden_venta        Int                   @id @default(autoincrement()) @db.UnsignedInt
+  codigo_orden_venta    String?               @unique(map: "codigo_orden_venta") @db.VarChar(20)
+  fecha_creacion        DateTime              @db.Date
+  fecha_vencimiento     DateTime?             @db.Date
+  descripcion           String?               @db.Text
+  id_cliente            Int                   @db.UnsignedInt
+  id_bodega             Int                   @db.UnsignedInt
+  id_estado_orden_venta Int                   @db.UnsignedInt
+  id_termino_pago       Int                   @db.UnsignedInt
+  id_usuario            Int                   @db.UnsignedInt
+  id_cotizacion         Int?                  @unique(map: "uq_ov_cotizacion") @db.UnsignedInt
+  detalle_orden_venta   detalle_orden_venta[]
+  bodega                bodega                @relation(fields: [id_bodega], references: [id_bodega], map: "fk_ov_bodega")
+  cliente               cliente               @relation(fields: [id_cliente], references: [id_cliente], map: "fk_ov_cliente")
+  cotizacion            cotizacion?           @relation(fields: [id_cotizacion], references: [id_cotizacion], map: "fk_ov_cotizacion")
+  estado_orden_venta    estado_orden_venta    @relation(fields: [id_estado_orden_venta], references: [id_estado_orden_venta], map: "fk_ov_estado")
+  termino_pago          termino_pago          @relation(fields: [id_termino_pago], references: [id_termino_pago], map: "fk_ov_termino")
+  usuario               usuario               @relation(fields: [id_usuario], references: [id_usuario], map: "fk_ov_usuario")
+  remision_venta        remision_venta[]
+
+  @@index([id_estado_orden_venta], map: "fk_ov_estado")
+  @@index([id_termino_pago], map: "fk_ov_termino")
+  @@index([id_usuario], map: "fk_ov_usuario")
+  @@index([id_bodega], map: "idx_ov_bodega")
+  @@index([id_cliente], map: "idx_ov_cliente")
+  @@index([fecha_creacion], map: "idx_ov_fecha")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model pagos_abonos {
+  id_pago     Int         @id @default(autoincrement()) @db.UnsignedInt
+  fecha_pago  DateTime    @db.Date
+  estado      Boolean     @default(true)
+  valor       Decimal     @db.Decimal(10, 2)
+  id_metodo   Int         @db.UnsignedInt
+  id_factura  Int         @db.UnsignedInt
+  factura     factura     @relation(fields: [id_factura], references: [id_factura], map: "fk_pago_factura")
+  metodo_pago metodo_pago @relation(fields: [id_metodo], references: [id_metodo], map: "fk_pago_metodo")
+
+  @@index([id_metodo], map: "fk_pago_metodo")
+  @@index([id_factura], map: "idx_pago_factura")
+  @@index([fecha_pago], map: "idx_pago_fecha")
+}
+
+model paises {
+  id_pais       Int             @id @default(autoincrement()) @db.UnsignedInt
+  nombre_pais   String          @unique(map: "nombre_pais") @db.VarChar(100)
+  departamentos departamentos[]
+}
+
+model permisos {
+  id_permiso     Int              @id @default(autoincrement()) @db.UnsignedInt
+  nombre_permiso String           @unique(map: "nombre_permiso") @db.VarChar(100)
+  roles_permisos roles_permisos[]
+}
+
+model producto {
+  id_producto             Int                       @id @default(autoincrement()) @db.UnsignedInt
+  codigo_producto         String?                   @unique(map: "codigo_producto") @db.VarChar(20)
+  nombre_producto         String                    @db.VarChar(150)
+  descripcion             String?                   @db.VarChar(255)
+  codigo_barras           String?                   @unique(map: "codigo_barras") @db.VarChar(50)
+  id_categoria_producto   Int                       @db.UnsignedInt
+  id_iva                  Int                       @db.UnsignedInt
+  detalle_compra          detalle_compra[]
+  detalle_cotizacion      detalle_cotizacion[]
+  detalle_orden_venta     detalle_orden_venta[]
+  detalle_remision_compra detalle_remision_compra[]
+  existencias             existencias[]
+  categoria_producto      categoria_producto        @relation(fields: [id_categoria_producto], references: [id_categoria_producto], map: "fk_producto_categoria")
+  iva                     iva                       @relation(fields: [id_iva], references: [id_iva], map: "fk_producto_iva")
+
+  @@index([id_categoria_producto], map: "fk_producto_categoria")
+  @@index([id_iva], map: "fk_producto_iva")
+}
+
+model proveedor {
+  id_proveedor      Int               @id @default(autoincrement()) @db.UnsignedInt
+  codigo_proveedor  String?           @unique(map: "codigo_proveedor") @db.VarChar(20)
+  num_documento     String            @unique(map: "num_documento") @db.VarChar(50)
+  nombre_empresa    String            @db.VarChar(150)
+  email             String?           @unique(map: "email") @db.VarChar(100)
+  telefono          String?           @db.VarChar(20)
+  direccion         String?           @db.VarChar(255)
+  nombre_contacto   String?           @db.VarChar(255)
+  id_tipo_proveedor Int               @db.UnsignedInt
+  id_tipo_doc       Int               @db.UnsignedInt
+  id_municipio      Int               @db.UnsignedInt
+  compras           compras[]
+  municipios        municipios        @relation(fields: [id_municipio], references: [id_municipio], map: "fk_proveedor_municipio")
+  tipo_documento    tipo_documento    @relation(fields: [id_tipo_doc], references: [id_tipo_doc], map: "fk_proveedor_tipo_doc")
+  tipo_proveedor    tipo_proveedor    @relation(fields: [id_tipo_proveedor], references: [id_tipo_proveedor], map: "fk_proveedor_tipo_proveedor")
+  remision_compra   remision_compra[]
+
+  @@index([id_municipio], map: "fk_proveedor_municipio")
+  @@index([id_tipo_doc], map: "fk_proveedor_tipo_doc")
+  @@index([id_tipo_proveedor], map: "fk_proveedor_tipo_proveedor")
+}
+
+model remision_compra {
+  id_remision_compra        Int                       @id @default(autoincrement()) @db.UnsignedInt
+  codigo_remision_compra    String                    @unique(map: "codigo_remision_compra") @db.VarChar(20)
+  fecha_creacion            DateTime                  @db.Date
+  fecha_vencimiento         DateTime?                 @db.Date
+  observaciones             String?                   @db.VarChar(255)
+  id_compra                 Int                       @db.UnsignedInt
+  id_proveedor              Int                       @db.UnsignedInt
+  id_estado_remision_compra Int                       @db.UnsignedInt
+  id_usuario_creador        Int                       @db.UnsignedInt
+  id_factura                Int?                      @db.UnsignedInt
+  firma_digital             Bytes?
+  nombre_firmante           String?                   @db.VarChar(150)
+  fecha_firma               DateTime?                 @db.DateTime(0)
+  detalle_remision_compra   detalle_remision_compra[]
+  compras                   compras                   @relation(fields: [id_compra], references: [id_compra], map: "fk_remision_compra_compra")
+  estado_remision_compra    estado_remision_compra    @relation(fields: [id_estado_remision_compra], references: [id_estado_remision_compra], map: "fk_remision_compra_estado")
+  proveedor                 proveedor                 @relation(fields: [id_proveedor], references: [id_proveedor], map: "fk_remision_compra_proveedor")
+  usuario                   usuario                   @relation(fields: [id_usuario_creador], references: [id_usuario], map: "fk_remision_compra_usuario")
+
+  @@index([id_estado_remision_compra], map: "fk_remision_compra_estado")
+  @@index([id_proveedor], map: "fk_remision_compra_proveedor")
+  @@index([id_usuario_creador], map: "fk_remision_compra_usuario")
+  @@index([id_compra], map: "idx_remision_compra_compra")
+  @@index([fecha_creacion], map: "idx_remision_compra_fecha")
+}
+
+model remision_venta {
+  id_remision_venta        Int                      @id @default(autoincrement()) @db.UnsignedInt
+  codigo_remision_venta    String?                  @unique(map: "codigo_remision_venta") @db.VarChar(20)
+  fecha_creacion           DateTime                 @db.Date
+  fecha_vencimiento        DateTime?                @db.Date
+  observaciones            String?                  @db.VarChar(255)
+  id_orden_venta           Int                      @db.UnsignedInt
+  id_cliente               Int                      @db.UnsignedInt
+  id_estado_remision_venta Int                      @db.UnsignedInt
+  id_usuario_creador       Int                      @db.UnsignedInt
+  id_factura               Int?                     @db.UnsignedInt
+  firma_digital            Bytes?
+  nombre_firmante          String?                  @db.VarChar(150)
+  fecha_firma              DateTime?                @db.DateTime(0)
+  detalle_remision_venta   detalle_remision_venta[]
+  cliente                  cliente                  @relation(fields: [id_cliente], references: [id_cliente], map: "fk_rv_cliente")
+  estado_remision_venta    estado_remision_venta    @relation(fields: [id_estado_remision_venta], references: [id_estado_remision_venta], map: "fk_rv_estado")
+  factura                  factura?                 @relation(fields: [id_factura], references: [id_factura], map: "fk_rv_factura")
+  orden_venta              orden_venta              @relation(fields: [id_orden_venta], references: [id_orden_venta], map: "fk_rv_orden")
+  usuario                  usuario                  @relation(fields: [id_usuario_creador], references: [id_usuario], map: "fk_rv_usuario")
+
+  @@index([id_cliente], map: "fk_rv_cliente")
+  @@index([id_estado_remision_venta], map: "fk_rv_estado")
+  @@index([id_factura], map: "fk_rv_factura")
+  @@index([id_usuario_creador], map: "fk_rv_usuario")
+  @@index([fecha_creacion], map: "idx_rv_fecha")
+  @@index([id_orden_venta], map: "idx_rv_orden")
+}
+
+model roles {
+  id_rol         Int              @id @default(autoincrement()) @db.UnsignedInt
+  nombre_rol     String           @unique(map: "nombre_rol") @db.VarChar(50)
+  estado         Boolean          @default(true)
+  roles_permisos roles_permisos[]
+  usuario        usuario[]
+}
+
+model roles_permisos {
+  id_rol     Int      @db.UnsignedInt
+  id_permiso Int      @db.UnsignedInt
+  permisos   permisos @relation(fields: [id_permiso], references: [id_permiso], onDelete: Cascade, map: "fk_rp_permiso")
+  roles      roles    @relation(fields: [id_rol], references: [id_rol], onDelete: Cascade, map: "fk_rp_rol")
+
+  @@id([id_rol, id_permiso])
+  @@index([id_permiso], map: "fk_rp_permiso")
+}
+
+model termino_pago {
+  id_termino_pago Int           @id @default(autoincrement()) @db.UnsignedInt
+  nombre_termino  String        @unique(map: "nombre_termino") @db.VarChar(100)
+  compras         compras[]
+  orden_venta     orden_venta[]
+}
+
+model tipo_cliente {
+  id_tipo_cliente     Int       @id @default(autoincrement()) @db.UnsignedInt
+  nombre_tipo_cliente String    @unique(map: "nombre_tipo_cliente") @db.VarChar(50)
+  cliente             cliente[]
+}
+
+model tipo_documento {
+  id_tipo_doc Int         @id @default(autoincrement()) @db.UnsignedInt
+  nombre_doc  String      @unique(map: "nombre_doc") @db.VarChar(60)
+  cliente     cliente[]
+  proveedor   proveedor[]
+  usuario     usuario[]
+}
+
+model tipo_proveedor {
+  id_tipo_proveedor     Int         @id @default(autoincrement()) @db.UnsignedInt
+  nombre_tipo_proveedor String      @unique(map: "nombre_tipo_proveedor") @db.VarChar(50)
+  proveedor             proveedor[]
+}
+
+model traslado {
+  id_traslado                               Int                @id @default(autoincrement()) @db.UnsignedInt
+  id_bodega_origen                          Int                @db.UnsignedInt
+  id_bodega_destino                         Int                @db.UnsignedInt
+  fecha_traslado                            DateTime           @db.Date
+  nota                                      String?            @db.VarChar(255)
+  id_estado_traslado                        Int                @db.UnsignedInt
+  detalle_traslado                          detalle_traslado[]
+  bodega_traslado_id_bodega_destinoTobodega bodega             @relation("traslado_id_bodega_destinoTobodega", fields: [id_bodega_destino], references: [id_bodega], map: "fk_traslado_destino")
+  estado_traslado                           estado_traslado    @relation(fields: [id_estado_traslado], references: [id_estado_traslado], map: "fk_traslado_estado")
+  bodega_traslado_id_bodega_origenTobodega  bodega             @relation("traslado_id_bodega_origenTobodega", fields: [id_bodega_origen], references: [id_bodega], map: "fk_traslado_origen")
+
+  @@index([id_estado_traslado], map: "fk_traslado_estado")
+  @@index([id_bodega_destino], map: "idx_traslado_destino")
+  @@index([fecha_traslado], map: "idx_traslado_fecha")
+  @@index([id_bodega_origen], map: "idx_traslado_origen")
+}
+
+model usuario {
+  id_usuario          Int                   @id @default(autoincrement()) @db.UnsignedInt
+  nombre              String                @db.VarChar(100)
+  apellido            String                @db.VarChar(100)
+  id_tipo_doc         Int                   @db.UnsignedInt
+  num_documento       String                @unique(map: "num_documento") @db.VarChar(20)
+  email               String                @unique(map: "email") @db.VarChar(100)
+  contrasena          String                @db.VarChar(255)
+  id_rol              Int                   @db.UnsignedInt
+  estado              Boolean               @default(true)
+  bodegas_por_usuario bodegas_por_usuario[]
+  compras             compras[]
+  cotizacion          cotizacion[]
+  orden_venta         orden_venta[]
+  remision_compra     remision_compra[]
+  remision_venta      remision_venta[]
+  roles               roles                 @relation(fields: [id_rol], references: [id_rol], map: "fk_usuario_rol")
+  tipo_documento      tipo_documento        @relation(fields: [id_tipo_doc], references: [id_tipo_doc], map: "fk_usuario_tipo_doc")
+
+  @@index([id_rol], map: "fk_usuario_rol")
+  @@index([id_tipo_doc], map: "fk_usuario_tipo_doc")
+}
