@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import 'dotenv/config';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
 @Injectable()
 export class PrismaService
@@ -8,7 +8,16 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
-    super({ log: ['error', 'warn'] });
+    const adapter = new PrismaMariaDb({
+      host: process.env.DATABASE_HOST ?? '127.0.0.1',
+      port: Number(process.env.DATABASE_PORT ?? 3306),
+      user: process.env.DATABASE_USER ?? 'root',
+      password: process.env.DATABASE_PASSWORD ?? '',
+      database: process.env.DATABASE_NAME ?? 'vetmanage1',
+      connectionLimit: 5,
+    });
+
+    super({ adapter });
   }
 
   async onModuleInit() {
