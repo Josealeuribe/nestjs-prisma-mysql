@@ -4,6 +4,7 @@ import { CrearUsuarioDto } from './dto/crear-usuario.dto';
 import { ActualizarUsuarioDto } from './dto/actualizar-usuario.dto';
 import * as bcrypt from 'bcrypt';
 import { usuarioSelect } from './usuario.select';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class UsuarioService {
@@ -49,26 +50,28 @@ export class UsuarioService {
   }
 
   async update(id: number, dto: ActualizarUsuarioDto) {
-    // ✅ valida existencia
     const exists = await this.prisma.usuario.findUnique({
       where: { id_usuario: id },
       select: { id_usuario: true },
     });
-    if (!exists) throw new NotFoundException('Usuario no encontrado');
 
-    // ✅ Si viene contrasena, la hasheamos
-    const data: any = { ...dto };
+    if (!exists) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    // ✅ Tipado fuerte con Prisma
+    const data: Prisma.usuarioUpdateInput = { ...dto };
+
+    // ✅ Si se envía contraseña, la hasheamos
     if (dto.contrasena) {
       data.contrasena = await bcrypt.hash(dto.contrasena, 10);
     }
 
-    const updated = await this.prisma.usuario.update({
+    return this.prisma.usuario.update({
       where: { id_usuario: id },
       data,
       select: usuarioSelect,
     });
-
-    return updated;
   }
 
   async remove(id: number) {

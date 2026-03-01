@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
@@ -10,8 +10,15 @@ export class AuthService {
     private readonly jwt: JwtService,
   ) {}
 
-  async login(email: string, contrasena: string) {
-    // ✅ Para login necesitamos traer la contraseña hasheada
+  /**
+   * Login con email + contraseña:
+   * - Verifica existencia del usuario
+   * - Verifica estado activo
+   * - Compara contraseña en texto plano vs hash (bcrypt)
+   * - Retorna JWT + usuario sin contraseña
+   */
+  async login(email: string, plainPassword: string) {
+    // ✅ Para login necesitamos traer el hash de la contraseña
     const user = await this.prisma.usuario.findUnique({
       where: { email },
       include: {
@@ -29,23 +36,24 @@ export class AuthService {
       throw new UnauthorizedException('Usuario inactivo');
     }
 
-    // ✅ Comparar contraseña (texto vs hash)
-    const ok = await bcrypt.compare(contrasena, user.contrasena);
+    // ✅ Comparar contraseña en texto plano con el hash almacenado
+    const ok = await bcrypt.compare(plainPassword, user.contrasena);
     if (!ok) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // ✅ Payload del token (lo mínimo necesario)
+    // ✅ Payload mínimo del token
     const payload = {
       sub: user.id_usuario,
       email: user.email,
       id_rol: user.id_rol,
     };
 
+    // ✅ Generar JWT
     const access_token = await this.jwt.signAsync(payload);
 
-    // ✅ Respuesta sin contraseña
-    const { contrasena: _, ...safeUser } = user;
+    // ✅ Nunca devolver contrasena al cliente
+    const { contrasena, ...safeUser } = user;
 
     return {
       access_token,

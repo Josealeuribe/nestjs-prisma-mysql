@@ -6,8 +6,13 @@ import { LoginDto } from './dto/login.dto';
 export class AuthController {
   constructor(private readonly service: AuthService) {}
 
+  /**
+   * POST /auth/login
+   * Recibe email y contraseña
+   * Retorna JWT + usuario sin contraseña
+   */
   @Post('login')
-  login(@Body() dto: LoginDto) {
+  async login(@Body() dto: LoginDto) {
     return this.service.login(dto.email, dto.contrasena);
   }
 }
