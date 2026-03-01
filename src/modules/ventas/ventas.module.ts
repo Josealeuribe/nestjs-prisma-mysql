@@ -11,7 +11,19 @@ import { PagosAbonosController } from './pagos-abonos/pagos-abonos.controller';
 import { PagosAbonosService } from './pagos-abonos/pagos-abonos.service';
 
 @Module({
-  controllers: [ClientesController, CotizacionesController, OrdenesVentaController, RemisionesVentaController, PagosAbonosController],
-  providers: [ClientesService, CotizacionesService, OrdenesVentaService, RemisionesVentaService, PagosAbonosService]
+  controllers: [
+    ClientesController,
+    CotizacionesController,
+    OrdenesVentaController,
+    RemisionesVentaController,
+    PagosAbonosController,
+  ],
+  providers: [
+    ClientesService,
+    CotizacionesService,
+    OrdenesVentaService,
+    RemisionesVentaService,
+    PagosAbonosService,
+  ],
 })
 export class VentasModule {}

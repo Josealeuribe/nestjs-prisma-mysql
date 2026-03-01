@@ -8,6 +8,6 @@ import { TrasladosService } from './traslados/traslados.service';
 
 @Module({
   controllers: [BodegasController, ProductosController, TrasladosController],
-  providers: [BodegasService, ProductosService, TrasladosService]
+  providers: [BodegasService, ProductosService, TrasladosService],
 })
 export class ExistenciasModule {}

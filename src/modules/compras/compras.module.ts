@@ -7,7 +7,16 @@ import { RemisionesCompraController } from './remisiones-compra/remisiones-compr
 import { RemisionesCompraService } from './remisiones-compra/remisiones-compra.service';
 
 @Module({
-  controllers: [ProveedoresController, OrdenesCompraController, RemisionesCompraController],
-  providers: [ProveedoresService, OrdenesCompraService, RemisionesCompraService]
+  controllers: [
+    ProveedoresController,
+    OrdenesCompraController,
+    RemisionesCompraController,
+  ],
+
+  providers: [
+    ProveedoresService,
+    OrdenesCompraService,
+    RemisionesCompraService,
+  ],
 })
 export class ComprasModule {}
