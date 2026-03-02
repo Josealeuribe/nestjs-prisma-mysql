@@ -1,10 +1,13 @@
 import {
   IsBoolean,
+  IsDateString,
   IsEmail,
   IsInt,
   IsOptional,
   IsString,
+  IsUrl,
   Length,
+  MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
@@ -42,4 +45,23 @@ export class CrearUsuarioDto {
   @IsOptional()
   @IsBoolean()
   estado?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  telefono?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fecha_nacimiento?: string;
+
+  @IsOptional()
+  @IsUrl()
+  @MaxLength(500)
+  img_url?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  id_genero?: number;
 }

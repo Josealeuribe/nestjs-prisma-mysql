@@ -26,8 +26,8 @@ model bodega {
 model bodegas_por_usuario {
   id_usuario Int     @db.UnsignedInt
   id_bodega  Int     @db.UnsignedInt
-  bodega     bodega  @relation(fields: [id_bodega], references: [id_bodega], onDelete: Cascade, map: "fk_bpu_bodega")
-  usuario    usuario @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade, map: "fk_bpu_usuario")
+  bodega     bodega  @relation(fields: [id_bodega], references: [id_bodega], map: "fk_bpu_bodega")
+  usuario    usuario @relation(fields: [id_usuario], references: [id_usuario], map: "fk_bpu_usuario")
 
   @@id([id_usuario, id_bodega])
   @@index([id_bodega], map: "fk_bpu_bodega")
@@ -36,6 +36,7 @@ model bodegas_por_usuario {
 model categoria_producto {
   id_categoria_producto Int        @id @default(autoincrement()) @db.UnsignedInt
   nombre_categoria      String     @unique(map: "nombre_categoria") @db.VarChar(100)
+  estado                Boolean    @default(true)
   producto              producto[]
 }
 
@@ -50,6 +51,7 @@ model cliente {
   id_tipo_cliente Int              @db.UnsignedInt
   id_municipio    Int              @db.UnsignedInt
   id_tipo_doc     Int              @db.UnsignedInt
+  estado          Boolean          @default(true)
   municipios      municipios       @relation(fields: [id_municipio], references: [id_municipio], map: "fk_cliente_municipio")
   tipo_cliente    tipo_cliente     @relation(fields: [id_tipo_cliente], references: [id_tipo_cliente], map: "fk_cliente_tipo_cliente")
   tipo_documento  tipo_documento   @relation(fields: [id_tipo_doc], references: [id_tipo_doc], map: "fk_cliente_tipo_doc")
@@ -76,6 +78,7 @@ model compras {
   id_estado_compra   Int               @db.UnsignedInt
   id_usuario_creador Int               @db.UnsignedInt
   id_bodega          Int               @db.UnsignedInt
+  fecha_entrega      DateTime?         @db.Date
   bodega             bodega            @relation(fields: [id_bodega], references: [id_bodega], map: "fk_compra_bodega")
   estado_compra      estado_compra     @relation(fields: [id_estado_compra], references: [id_estado_compra], map: "fk_compra_estado")
   proveedor          proveedor         @relation(fields: [id_proveedor], references: [id_proveedor], map: "fk_compra_proveedor")
@@ -394,6 +397,7 @@ model producto {
   codigo_barras           String?                   @unique(map: "codigo_barras") @db.VarChar(50)
   id_categoria_producto   Int                       @db.UnsignedInt
   id_iva                  Int                       @db.UnsignedInt
+  estado                  Boolean                   @default(true)
   detalle_compra          detalle_compra[]
   detalle_cotizacion      detalle_cotizacion[]
   detalle_orden_venta     detalle_orden_venta[]
@@ -418,6 +422,7 @@ model proveedor {
   id_tipo_proveedor Int               @db.UnsignedInt
   id_tipo_doc       Int               @db.UnsignedInt
   id_municipio      Int               @db.UnsignedInt
+  estado            Boolean           @default(true)
   compras           compras[]
   municipios        municipios        @relation(fields: [id_municipio], references: [id_municipio], map: "fk_proveedor_municipio")
   tipo_documento    tipo_documento    @relation(fields: [id_tipo_doc], references: [id_tipo_doc], map: "fk_proveedor_tipo_doc")
@@ -537,15 +542,18 @@ model traslado {
   fecha_traslado                            DateTime           @db.Date
   nota                                      String?            @db.VarChar(255)
   id_estado_traslado                        Int                @db.UnsignedInt
+  id_responsable                            Int?               @db.UnsignedInt
   detalle_traslado                          detalle_traslado[]
   bodega_traslado_id_bodega_destinoTobodega bodega             @relation("traslado_id_bodega_destinoTobodega", fields: [id_bodega_destino], references: [id_bodega], map: "fk_traslado_destino")
   estado_traslado                           estado_traslado    @relation(fields: [id_estado_traslado], references: [id_estado_traslado], map: "fk_traslado_estado")
   bodega_traslado_id_bodega_origenTobodega  bodega             @relation("traslado_id_bodega_origenTobodega", fields: [id_bodega_origen], references: [id_bodega], map: "fk_traslado_origen")
+  usuario                                   usuario?           @relation(fields: [id_responsable], references: [id_usuario], map: "fk_traslado_responsable")
 
   @@index([id_estado_traslado], map: "fk_traslado_estado")
   @@index([id_bodega_destino], map: "idx_traslado_destino")
   @@index([fecha_traslado], map: "idx_traslado_fecha")
   @@index([id_bodega_origen], map: "idx_traslado_origen")
+  @@index([id_responsable], map: "fk_traslado_responsable")
 }
 
 model usuario {
@@ -558,15 +566,28 @@ model usuario {
   contrasena          String                @db.VarChar(255)
   id_rol              Int                   @db.UnsignedInt
   estado              Boolean               @default(true)
+  telefono            String?               @db.VarChar(30)
+  fecha_nacimiento    DateTime?             @db.Date
+  img_url             String?               @db.VarChar(500)
+  id_genero           Int?                  @db.UnsignedInt
   bodegas_por_usuario bodegas_por_usuario[]
   compras             compras[]
   cotizacion          cotizacion[]
   orden_venta         orden_venta[]
   remision_compra     remision_compra[]
   remision_venta      remision_venta[]
+  traslado            traslado[]
+  genero              genero?               @relation(fields: [id_genero], references: [id_genero], map: "fk_usuario_genero")
   roles               roles                 @relation(fields: [id_rol], references: [id_rol], map: "fk_usuario_rol")
   tipo_documento      tipo_documento        @relation(fields: [id_tipo_doc], references: [id_tipo_doc], map: "fk_usuario_tipo_doc")
 
   @@index([id_rol], map: "fk_usuario_rol")
   @@index([id_tipo_doc], map: "fk_usuario_tipo_doc")
+  @@index([id_genero], map: "fk_usuario_genero")
+}
+
+model genero {
+  id_genero     Int       @id @default(autoincrement()) @db.UnsignedInt
+  nombre_genero String    @unique(map: "nombre_genero") @db.VarChar(30)
+  usuario       usuario[]
 }

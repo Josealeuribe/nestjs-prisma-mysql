@@ -7,4 +7,8 @@ export class UsuarioResponseDto {
   email: string;
   id_rol: number;
   estado: boolean;
+  telefono?: string | null;
+  fecha_nacimiento?: Date | null;
+  img_url?: string | null;
+  id_genero?: number | null;
 }

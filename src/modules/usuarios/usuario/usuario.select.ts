@@ -7,4 +7,8 @@ export const usuarioSelect = {
   email: true,
   id_rol: true,
   estado: true,
+  telefono: true,
+  fecha_nacimiento: true,
+  img_url: true,
+  id_genero: true,
 } as const;
