@@ -7,10 +7,12 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { UsuarioService } from './usuario.service';
 import { CrearUsuarioDto } from './dto/crear-usuario.dto';
 import { ActualizarUsuarioDto } from './dto/actualizar-usuario.dto';
+import { ListUsuarioQueryDto } from './dto/list-usuario.query.dto';
 
 @Controller('usuario')
 export class UsuarioController {
@@ -18,8 +20,8 @@ export class UsuarioController {
 
   // Get/usuarios
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(@Query() query: ListUsuarioQueryDto) {
+    return this.service.findAll(query);
   }
 
   // Get/usuarios/:id

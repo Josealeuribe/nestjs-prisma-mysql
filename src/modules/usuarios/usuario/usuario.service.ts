@@ -3,21 +3,74 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { CrearUsuarioDto } from './dto/crear-usuario.dto';
 import { ActualizarUsuarioDto } from './dto/actualizar-usuario.dto';
 import * as bcrypt from 'bcrypt';
-import { usuarioSelect } from './usuario.select';
+import { usuarioSelect } from './selects/usuario.select';
 import { Prisma } from '@prisma/client';
+import { ListUsuarioQueryDto } from './dto/list-usuario.query.dto';
+
+export type UsuarioPayload = Prisma.usuarioGetPayload<{
+  select: typeof usuarioSelect;
+}>;
+
+export type UsuariosFindAllResponse =
+  | UsuarioPayload[]
+  | {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+      data: UsuarioPayload[];
+    };
 
 @Injectable()
 export class UsuarioService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
-    return this.prisma.usuario.findMany({
-      orderBy: { id_usuario: 'desc' },
-      select: usuarioSelect,
-    });
+  async findAll(
+    query: ListUsuarioQueryDto = {},
+  ): Promise<UsuariosFindAllResponse> {
+    const where: Prisma.usuarioWhereInput = {};
+
+    if (query.estado !== undefined) where.estado = query.estado === 'true';
+
+    if (query.q && query.q.trim()) {
+      const q = query.q.trim();
+      where.OR = [
+        { nombre: { contains: q } },
+        { apellido: { contains: q } },
+        { email: { contains: q } },
+        { num_documento: { contains: q } },
+      ];
+    }
+
+    const hasPagination = query.page !== undefined || query.limit !== undefined;
+
+    if (!hasPagination) {
+      return this.prisma.usuario.findMany({
+        where,
+        orderBy: { id_usuario: 'desc' },
+        select: usuarioSelect,
+      });
+    }
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.usuario.count({ where }),
+      this.prisma.usuario.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { id_usuario: 'desc' },
+        select: usuarioSelect,
+      }),
+    ]);
+
+    return { page, limit, total, pages: Math.ceil(total / limit), data };
   }
 
-  async findOne(id: number) {
+  async findOne(id: number): Promise<UsuarioPayload> {
     const user = await this.prisma.usuario.findUnique({
       where: { id_usuario: id },
       select: usuarioSelect,
