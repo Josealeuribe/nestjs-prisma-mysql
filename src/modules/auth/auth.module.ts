@@ -1,34 +1,26 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { PrismaModule } from '../../prisma/prisma.module';
+import { PrismaService } from '../../prisma/prisma.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { JwtStrategy } from './jwt.strategy';
 
 @Module({
   imports: [
-    PrismaModule,
-    ConfigModule, // ✅ IMPORTANTE para que ConfigService esté en este contexto
+    ConfigModule,
+    PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
-      imports: [ConfigModule], // ✅ aún más explícito
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const secret = config.get<string>('JWT_SECRET');
-        if (!secret) throw new Error('JWT_SECRET is missing in .env');
-
-        // (elige tu expiresIn: si estás usando '86400' como string, conviértelo a number)
-        const expiresIn = Number(
-          config.get<string>('JWT_EXPIRES_IN') ?? '86400',
-        );
-
-        return {
-          secret,
-          signOptions: { expiresIn },
-        };
-      },
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET') ?? 'dev_secret_change_me',
+        signOptions: { expiresIn: '8h' },
+      }),
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, PrismaService, JwtStrategy],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

@@ -18,6 +18,7 @@ model bodega {
   cotizacion                                  cotizacion[]
   existencias                                 existencias[]
   orden_venta                                 orden_venta[]
+  roles                                       roles[]
   traslado_traslado_id_bodega_destinoTobodega traslado[]            @relation("traslado_id_bodega_destinoTobodega")
   traslado_traslado_id_bodega_origenTobodega  traslado[]            @relation("traslado_id_bodega_origenTobodega")
 
@@ -495,11 +496,15 @@ model remision_venta {
 }
 
 model roles {
-  id_rol         Int              @id @default(autoincrement()) @db.UnsignedInt
-  nombre_rol     String           @unique(map: "nombre_rol") @db.VarChar(50)
-  estado         Boolean          @default(true)
-  roles_permisos roles_permisos[]
-  usuario        usuario[]
+  id_rol            Int              @id @default(autoincrement()) @db.UnsignedInt
+  nombre_rol        String           @unique(map: "nombre_rol") @db.VarChar(50)
+  estado            Boolean          @default(true)
+  id_bodega_default Int?             @db.UnsignedInt
+  bodega            bodega?          @relation(fields: [id_bodega_default], references: [id_bodega], map: "fk_roles_bodega_default")
+  roles_permisos    roles_permisos[]
+  usuario           usuario[]
+
+  @@index([id_bodega_default], map: "fk_roles_bodega_default")
 }
 
 model roles_permisos {

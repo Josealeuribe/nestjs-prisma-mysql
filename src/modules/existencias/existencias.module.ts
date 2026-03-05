@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { BodegaController } from './bodegas/bodega/bodegas.controller';
-import { BodegaService } from './bodegas/bodega/bodegas.service';
+import { BodegaController } from './bodegas/bodegas.controller';
+import { BodegaService } from './bodegas/bodegas.service';
 import { ProductosController } from './productos/productos.controller';
 import { ProductosService } from './productos/productos.service';
 import { TrasladosController } from './traslados/traslados.controller';

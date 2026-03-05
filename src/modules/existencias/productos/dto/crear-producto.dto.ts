@@ -31,6 +31,10 @@ export class CreateProductoDto {
 
   @IsInt()
   @Min(1)
+  id_categoria_producto: number;
+
+  @IsInt()
+  @Min(1)
   id_iva: number;
 
   @IsOptional()
