@@ -1,36 +1,33 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
-export type JwtPayload = {
+type JwtPayload = {
   sub: number;
   email: string;
   id_rol: number;
-  id_bodega_activa?: number | null;
 };
 
-function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    // ✅ en desarrollo puedes dejar fallback
-    return 'dev_secret_change_me';
-    // ✅ en producción sería mejor tirar error:
-    // throw new Error('JWT_SECRET no está definido en el .env');
-  }
-  return secret;
-}
-
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-  constructor() {
+export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor(config: ConfigService) {
+    const secret = config.get<string>('JWT_SECRET');
+    if (!secret) throw new Error('JWT_SECRET is missing in .env');
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: getJwtSecret(), // ✅ ahora siempre es string
+      secretOrKey: secret,
     });
   }
 
-  validate(payload: JwtPayload) {
-    return payload; // queda en req.user
+  async validate(payload: JwtPayload) {
+    if (!payload?.sub) throw new UnauthorizedException('Token inválido');
+    return {
+      id_usuario: payload.sub,
+      email: payload.email,
+      id_rol: payload.id_rol,
+    };
   }
 }

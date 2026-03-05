@@ -8,12 +8,15 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { UsuarioService } from './usuario.service';
 import { CrearUsuarioDto } from './dto/crear-usuario.dto';
 import { ActualizarUsuarioDto } from './dto/actualizar-usuario.dto';
 import { ListUsuarioQueryDto } from './dto/list-usuario.query.dto';
+import { JwtAuthGuard } from 'src/modules/auth/login/jwt/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('usuario')
 export class UsuarioController {
   constructor(private readonly service: UsuarioService) {}
