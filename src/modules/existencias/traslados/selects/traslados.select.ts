@@ -41,35 +41,34 @@ export const trasladoListSelect = Prisma.validator<Prisma.trasladoSelect>()({
   },
 });
 
-export const trasladoDetailSelect =
-  Prisma.validator<Prisma.trasladoSelect>()({
-    ...trasladoListSelect,
-    detalle_traslado: {
-      select: {
-        id_detalle: true,
-        id_existencia: true,
-        cantidad: true,
-        existencias: {
-          select: {
-            id_existencia: true,
-            id_producto: true,
-            id_bodega: true,
-            cantidad: true,
-            lote: true,
-            producto: {
-              select: {
-                id_producto: true,
-                nombre_producto: true,
-              },
+export const trasladoDetailSelect = Prisma.validator<Prisma.trasladoSelect>()({
+  ...trasladoListSelect,
+  detalle_traslado: {
+    select: {
+      id_detalle: true,
+      id_existencia: true,
+      cantidad: true,
+      existencias: {
+        select: {
+          id_existencia: true,
+          id_producto: true,
+          id_bodega: true,
+          cantidad: true,
+          lote: true,
+          producto: {
+            select: {
+              id_producto: true,
+              nombre_producto: true,
             },
-            bodega: {
-              select: {
-                id_bodega: true,
-                nombre_bodega: true,
-              },
+          },
+          bodega: {
+            select: {
+              id_bodega: true,
+              nombre_bodega: true,
             },
           },
         },
       },
     },
-  });
+  },
+});

@@ -9,7 +9,17 @@ import { ExistenciasController } from './existencias.controller';
 import { ExistenciasService } from './existencias.service';
 
 @Module({
-  controllers: [BodegaController, ProductosController, TrasladosController, ExistenciasController],
-  providers: [BodegaService, ProductosService, TrasladosService, ExistenciasService],
+  controllers: [
+    BodegaController,
+    ProductosController,
+    TrasladosController,
+    ExistenciasController,
+  ],
+  providers: [
+    BodegaService,
+    ProductosService,
+    TrasladosService,
+    ExistenciasService,
+  ],
 })
 export class ExistenciasModule {}

@@ -74,9 +74,7 @@ export class ExistenciasService {
         id_bodega: args.id_bodega,
         lote: args.lote,
         fecha_vencimiento: args.fecha_vencimiento,
-        ...(args.excluirId
-          ? { id_existencia: { not: args.excluirId } }
-          : {}),
+        ...(args.excluirId ? { id_existencia: { not: args.excluirId } } : {}),
       },
       select: { id_existencia: true },
     });

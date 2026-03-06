@@ -43,4 +43,3 @@ export const existenciaDetailSelect =
   Prisma.validator<Prisma.existenciasSelect>()({
     ...existenciaListSelect,
   });
-  

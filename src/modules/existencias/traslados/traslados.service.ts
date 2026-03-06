@@ -84,7 +84,9 @@ export class TrasladosService {
     });
 
     if (!usuario) {
-      throw new BadRequestException(`Usuario responsable inválido: ${idUsuario}`);
+      throw new BadRequestException(
+        `Usuario responsable inválido: ${idUsuario}`,
+      );
     }
   }
 
@@ -112,7 +114,9 @@ export class TrasladosService {
     ]);
 
     if (!origen) {
-      throw new BadRequestException(`Bodega origen inválida: ${idBodegaOrigen}`);
+      throw new BadRequestException(
+        `Bodega origen inválida: ${idBodegaOrigen}`,
+      );
     }
 
     if (!destino) {
@@ -436,6 +440,9 @@ export class TrasladosService {
         });
       }
 
+      // ... dentro de tu service y la transacción (tx)
+
+      // 1. Ejecutamos el update y guardamos el resultado directamente
       const updated = await tx.traslado.update({
         where: { id_traslado: id },
         data: {
@@ -450,18 +457,19 @@ export class TrasladosService {
         select: trasladoDetailSelect,
       });
 
+      // 2. Lógica de negocio
       const debeProcesarInventario =
         actual.id_estado_traslado !== this.ESTADO_RECIBIDO &&
         nuevoEstado === this.ESTADO_RECIBIDO;
 
       if (debeProcesarInventario) {
         await this.procesarInventarioTraslado(tx, id);
+        return tx.traslado.findUniqueOrThrow({
+          where: { id_traslado: id },
+          select: trasladoDetailSelect,
+        });
       }
-
-      return tx.traslado.findUniqueOrThrow({
-        where: { id_traslado: id },
-        select: trasladoDetailSelect,
-      });
+      return updated;
     });
   }
 }
