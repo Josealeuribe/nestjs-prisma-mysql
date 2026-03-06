@@ -27,6 +27,11 @@ type ScopeOpts = {
 export class TrasladosService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private readonly ESTADO_BORRADOR = 1;
+  private readonly ESTADO_EN_TRANSITO = 2;
+  private readonly ESTADO_RECIBIDO = 3;
+  private readonly ESTADO_ANULADO = 4;
+
   private assertBodegaAccess(idBodega: number, bodegasPermitidas?: number[]) {
     if (!idBodega || Number.isNaN(idBodega)) {
       throw new BadRequestException('Bodega activa inválida');
@@ -155,7 +160,11 @@ export class TrasladosService {
       select: {
         id_existencia: true,
         id_bodega: true,
+        id_producto: true,
         cantidad: true,
+        lote: true,
+        fecha_vencimiento: true,
+        nota: true,
       },
     });
 
@@ -178,19 +187,115 @@ export class TrasladosService {
         );
       }
 
-      const stockActual = Number(existencia.cantidad);
-      if (item.cantidad > stockActual) {
+      const cantidadDisponible = Number(existencia.cantidad);
+      if (item.cantidad > cantidadDisponible) {
         throw new BadRequestException(
-          `La cantidad solicitada para la existencia ${item.id_existencia} supera el stock disponible`,
+          `La cantidad solicitada para la existencia ${item.id_existencia} supera la disponible`,
         );
+      }
+    }
+  }
+
+  private async procesarInventarioTraslado(
+    tx: Prisma.TransactionClient,
+    idTraslado: number,
+  ) {
+    const traslado = await tx.traslado.findUnique({
+      where: { id_traslado: idTraslado },
+      select: {
+        id_traslado: true,
+        id_bodega_origen: true,
+        id_bodega_destino: true,
+        id_estado_traslado: true,
+        detalle_traslado: {
+          select: {
+            id_existencia: true,
+            cantidad: true,
+            existencias: {
+              select: {
+                id_existencia: true,
+                id_producto: true,
+                id_bodega: true,
+                cantidad: true,
+                lote: true,
+                fecha_vencimiento: true,
+                nota: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!traslado) {
+      throw new NotFoundException('Traslado no encontrado');
+    }
+
+    if (traslado.id_estado_traslado !== this.ESTADO_RECIBIDO) {
+      throw new BadRequestException(
+        'Solo se puede procesar inventario para traslados en estado Recibido',
+      );
+    }
+
+    for (const item of traslado.detalle_traslado) {
+      const origen = item.existencias;
+      const cantidadMover = new Prisma.Decimal(item.cantidad);
+
+      const cantidadOrigenActual = new Prisma.Decimal(origen.cantidad);
+      if (cantidadOrigenActual.lt(cantidadMover)) {
+        throw new BadRequestException(
+          `La existencia ${origen.id_existencia} no tiene cantidad suficiente para procesar el traslado`,
+        );
+      }
+
+      const nuevaCantidadOrigen = cantidadOrigenActual.sub(cantidadMover);
+
+      await tx.existencias.update({
+        where: { id_existencia: origen.id_existencia },
+        data: {
+          cantidad: nuevaCantidadOrigen,
+        },
+      });
+
+      const destinoExistencia = await tx.existencias.findFirst({
+        where: {
+          id_producto: origen.id_producto,
+          id_bodega: traslado.id_bodega_destino,
+          lote: origen.lote,
+          fecha_vencimiento: origen.fecha_vencimiento,
+        },
+        select: {
+          id_existencia: true,
+          cantidad: true,
+        },
+      });
+
+      if (destinoExistencia) {
+        await tx.existencias.update({
+          where: { id_existencia: destinoExistencia.id_existencia },
+          data: {
+            cantidad: new Prisma.Decimal(destinoExistencia.cantidad).add(
+              cantidadMover,
+            ),
+          },
+        });
+      } else {
+        await tx.existencias.create({
+          data: {
+            id_producto: origen.id_producto,
+            id_bodega: traslado.id_bodega_destino,
+            nota: origen.nota ?? null,
+            cantidad: cantidadMover,
+            fecha_vencimiento: origen.fecha_vencimiento,
+            lote: origen.lote ?? '',
+          },
+        });
       }
     }
   }
 
   async create(dto: CreateTrasladoDto, opts: CreateOpts) {
     this.assertBodegaAccess(opts.idBodegaActiva, opts.bodegasPermitidas);
-
-    const ESTADO_INICIAL = 1;
 
     return this.prisma.$transaction(async (tx) => {
       await this.validarBodegas(
@@ -203,13 +308,13 @@ export class TrasladosService {
         },
       );
 
-      await this.validarEstadoTraslado(tx, ESTADO_INICIAL);
+      await this.validarEstadoTraslado(tx, this.ESTADO_BORRADOR);
       await this.validarResponsable(tx, opts.idUsuario);
       await this.validarExistencias(tx, dto.id_bodega_origen, dto.detalle);
 
       const codigo_traslado = await this.nextCodigoTraslado(tx, 'TRS', 4);
 
-      const traslado = await tx.traslado.create({
+      return tx.traslado.create({
         data: {
           id_bodega_origen: dto.id_bodega_origen,
           id_bodega_destino: dto.id_bodega_destino,
@@ -217,10 +322,9 @@ export class TrasladosService {
             ? new Date(dto.fecha_traslado)
             : new Date(),
           nota: dto.nota ?? null,
-          id_estado_traslado: ESTADO_INICIAL,
+          id_estado_traslado: this.ESTADO_BORRADOR,
           id_responsable: opts.idUsuario,
           codigo_traslado,
-
           detalle_traslado: {
             create: dto.detalle.map((d) => ({
               id_existencia: d.id_existencia,
@@ -230,8 +334,6 @@ export class TrasladosService {
         },
         select: trasladoDetailSelect,
       });
-
-      return traslado;
     });
   }
 
@@ -288,9 +390,19 @@ export class TrasladosService {
       bodegasPermitidas: opts.bodegasPermitidas,
     });
 
+    if (
+      actual.id_estado_traslado === this.ESTADO_RECIBIDO ||
+      actual.id_estado_traslado === this.ESTADO_ANULADO
+    ) {
+      throw new BadRequestException(
+        'No puedes editar un traslado recibido o anulado',
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const nuevoOrigen = dto.id_bodega_origen ?? actual.id_bodega_origen;
       const nuevoDestino = dto.id_bodega_destino ?? actual.id_bodega_destino;
+      const nuevoEstado = dto.id_estado_traslado ?? actual.id_estado_traslado;
 
       if (dto.id_bodega_origen || dto.id_bodega_destino) {
         await this.validarBodegas(tx, nuevoOrigen, nuevoDestino, {
@@ -303,6 +415,12 @@ export class TrasladosService {
       }
 
       if (dto.detalle?.length) {
+        if (actual.id_estado_traslado !== this.ESTADO_BORRADOR) {
+          throw new BadRequestException(
+            'Solo puedes editar el detalle de un traslado en borrador',
+          );
+        }
+
         await this.validarExistencias(tx, nuevoOrigen, dto.detalle);
 
         await tx.detalle_traslado.deleteMany({
@@ -332,7 +450,18 @@ export class TrasladosService {
         select: trasladoDetailSelect,
       });
 
-      return updated;
+      const debeProcesarInventario =
+        actual.id_estado_traslado !== this.ESTADO_RECIBIDO &&
+        nuevoEstado === this.ESTADO_RECIBIDO;
+
+      if (debeProcesarInventario) {
+        await this.procesarInventarioTraslado(tx, id);
+      }
+
+      return tx.traslado.findUniqueOrThrow({
+        where: { id_traslado: id },
+        select: trasladoDetailSelect,
+      });
     });
   }
 }

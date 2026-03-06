@@ -54,9 +54,7 @@ export class ExistenciasService {
     }
 
     if (!producto.estado) {
-      throw new BadRequestException(
-        `El producto ${idProducto} está inactivo`,
-      );
+      throw new BadRequestException(`El producto ${idProducto} está inactivo`);
     }
   }
 
