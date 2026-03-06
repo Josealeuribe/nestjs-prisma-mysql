@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -10,23 +11,21 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { CreateTrasladoDto } from './dto/create-traslado.dto';
-import { UpdateTrasladoDto } from './dto/update-traslado.dto';
-import { TrasladosService } from './traslados.service';
+import { CreateExistenciaDto } from './dto/create-existencia.dto';
+import { UpdateExistenciaDto } from './dto/update-existencia.dto';
+import { ExistenciasService } from './existencias.service';
 
 @UseGuards(AuthGuard('jwt'))
-@Controller('traslados')
-export class TrasladosController {
-  constructor(private readonly trasladosService: TrasladosService) {}
+@Controller('existencias')
+export class ExistenciasController {
+  constructor(private readonly existenciasService: ExistenciasService) {}
 
   @Post()
-  create(@Req() req: any, @Body() dto: CreateTrasladoDto) {
-    const idUsuario = req.user.id_usuario;
+  create(@Req() req: any, @Body() dto: CreateExistenciaDto) {
     const idBodegaActiva = req.user.id_bodega_activa;
     const bodegasPermitidas = req.user.bodegasPermitidas as number[] | undefined;
 
-    return this.trasladosService.create(dto, {
-      idUsuario,
+    return this.existenciasService.create(dto, {
       idBodegaActiva,
       bodegasPermitidas,
     });
@@ -37,7 +36,7 @@ export class TrasladosController {
     const idBodegaActiva = req.user.id_bodega_activa;
     const bodegasPermitidas = req.user.bodegasPermitidas as number[] | undefined;
 
-    return this.trasladosService.findAll({
+    return this.existenciasService.findAll({
       idBodegaActiva,
       bodegasPermitidas,
     });
@@ -47,21 +46,28 @@ export class TrasladosController {
   findOne(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
     const bodegasPermitidas = req.user.bodegasPermitidas as number[] | undefined;
 
-    return this.trasladosService.findOne(id, { bodegasPermitidas });
+    return this.existenciasService.findOne(id, { bodegasPermitidas });
   }
 
   @Patch(':id')
   update(
     @Req() req: any,
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateTrasladoDto,
+    @Body() dto: UpdateExistenciaDto,
   ) {
-    const idUsuario = req.user.id_usuario;
+    const idBodegaActiva = req.user.id_bodega_activa;
     const bodegasPermitidas = req.user.bodegasPermitidas as number[] | undefined;
 
-    return this.trasladosService.update(id, dto, {
-      idUsuario,
+    return this.existenciasService.update(id, dto, {
+      idBodegaActiva,
       bodegasPermitidas,
     });
+  }
+
+  @Delete(':id')
+  remove(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
+    const bodegasPermitidas = req.user.bodegasPermitidas as number[] | undefined;
+
+    return this.existenciasService.remove(id, { bodegasPermitidas });
   }
 }
