@@ -1,29 +1,34 @@
-import { Type } from 'class-transformer';
 import {
-  ArrayMinSize,
   IsArray,
-  IsDateString,
   IsInt,
   IsOptional,
   IsString,
   MaxLength,
   Min,
   ValidateNested,
+  IsDateString,
+  ArrayMinSize,
 } from 'class-validator';
-import { DetalleRemisionItemDto } from './detalle-remision-item.dto';
+import { Type } from 'class-transformer';
+import { CreateDetalleRemisionCompraDto } from './detalle-remision-item.dto';
 
 export class CreateRemisionCompraDto {
   @IsInt()
   @Min(1)
   id_compra: number;
 
-  /**
-   * Lo permito para reforzar consistencia con la compra.
-   * El service valida que coincida con compras.id_proveedor
-   */
   @IsInt()
   @Min(1)
   id_proveedor: number;
+
+  @IsInt()
+  @Min(1)
+  id_bodega: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  id_factura?: number;
 
   @IsOptional()
   @IsDateString()
@@ -37,6 +42,6 @@ export class CreateRemisionCompraDto {
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
-  @Type(() => DetalleRemisionItemDto)
-  detalle: DetalleRemisionItemDto[];
+  @Type(() => CreateDetalleRemisionCompraDto)
+  detalle_remision_compra: CreateDetalleRemisionCompraDto[];
 }

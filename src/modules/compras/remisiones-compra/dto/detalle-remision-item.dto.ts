@@ -1,28 +1,23 @@
-import { Type } from 'class-transformer';
 import {
   IsDateString,
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
   MaxLength,
   Min,
+  IsNumberString,
 } from 'class-validator';
 
-export class DetalleRemisionItemDto {
+export class CreateDetalleRemisionCompraDto {
   @IsInt()
   @Min(1)
   id_producto: number;
 
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0.01)
-  cantidad: number;
+  @IsNumberString()
+  cantidad: string;
 
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  precio_unitario: number;
+  @IsNumberString()
+  precio_unitario: string;
 
   @IsInt()
   @Min(1)

@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateRemisionCompraDto } from './dto/create-remision-compra.dto';
 import { UpdateRemisionCompraDto } from './dto/update-remision-compra.dto';
+import { CambiarEstadoRemisionCompraDto } from './dto/estado-remision-compra.dto';
 import {
   remisionCompraDetailSelect,
   remisionCompraListSelect,
@@ -20,6 +21,11 @@ type CreateOpts = {
 };
 
 type ScopeOpts = {
+  bodegasPermitidas?: number[];
+};
+
+type UpdateOpts = {
+  idUsuario: number;
   bodegasPermitidas?: number[];
 };
 
@@ -87,6 +93,7 @@ export class RemisionesCompraService {
 
     if (idBodegaActiva) {
       this.assertBodegaAccess(idBodegaActiva, bodegasPermitidas);
+
       if (compra.id_bodega !== idBodegaActiva) {
         throw new ForbiddenException(
           'La compra no pertenece a la bodega activa',
@@ -132,10 +139,12 @@ export class RemisionesCompraService {
 
   private async validarProductosEIvas(
     tx: Prisma.TransactionClient,
-    detalle: CreateRemisionCompraDto['detalle'],
+    detalle: CreateRemisionCompraDto['detalle_remision_compra'],
   ) {
-    const productoIds = [...new Set(detalle.map((d) => d.id_producto))];
-    const ivaIds = [...new Set(detalle.map((d) => d.id_iva))];
+    const productoIds: number[] = [
+      ...new Set(detalle.map((d) => d.id_producto)),
+    ];
+    const ivaIds: number[] = [...new Set(detalle.map((d) => d.id_iva))];
 
     const [productos, ivas] = await Promise.all([
       tx.producto.findMany({
@@ -170,8 +179,10 @@ export class RemisionesCompraService {
   }
 
   private validarDetalleContraCompra(
-    compra: Awaited<ReturnType<RemisionesCompraService['validarCompraYAcceso']>>,
-    detalle: CreateRemisionCompraDto['detalle'],
+    compra: Awaited<
+      ReturnType<RemisionesCompraService['validarCompraYAcceso']>
+    >,
+    detalle: CreateRemisionCompraDto['detalle_remision_compra'],
   ) {
     const productosCompra = new Map(
       compra.detalle_compra.map((d) => [d.id_producto, d]),
@@ -194,8 +205,106 @@ export class RemisionesCompraService {
     }
   }
 
+  private validarCantidadesYPrecios(
+    detalle: CreateRemisionCompraDto['detalle_remision_compra'],
+  ) {
+    for (const item of detalle) {
+      const cantidad = Number(item.cantidad);
+      const precio = Number(item.precio_unitario);
+
+      if (!Number.isFinite(cantidad) || cantidad <= 0) {
+        throw new BadRequestException(
+          `La cantidad del producto ${item.id_producto} debe ser mayor a 0`,
+        );
+      }
+
+      if (!Number.isFinite(precio) || precio < 0) {
+        throw new BadRequestException(
+          `El precio unitario del producto ${item.id_producto} es inválido`,
+        );
+      }
+    }
+  }
+
+  private validarDetalleSinDuplicados(
+    detalle: CreateRemisionCompraDto['detalle_remision_compra'],
+  ) {
+    const claves = new Set<string>();
+
+    for (const item of detalle) {
+      const clave = [
+        item.id_producto,
+        item.lote ?? '',
+        item.fecha_vencimiento ?? '',
+      ].join('|');
+
+      if (claves.has(clave)) {
+        throw new BadRequestException(
+          `Detalle duplicado para producto ${item.id_producto} con el mismo lote y fecha de vencimiento`,
+        );
+      }
+
+      claves.add(clave);
+    }
+  }
+
+  private async aplicarExistenciasDesdeRemision(
+    tx: Prisma.TransactionClient,
+    remision: {
+      id_remision_compra: number;
+      id_bodega: number;
+      detalle_remision_compra: Array<{
+        id_producto: number;
+        cantidad: Prisma.Decimal;
+        lote: string;
+        fecha_vencimiento: Date | null;
+        nota: string | null;
+      }>;
+    },
+  ) {
+    for (const item of remision.detalle_remision_compra) {
+      const existencia = await tx.existencias.findFirst({
+        where: {
+          id_producto: item.id_producto,
+          id_bodega: remision.id_bodega,
+          lote: item.lote ?? '',
+          fecha_vencimiento: item.fecha_vencimiento ?? null,
+        },
+      });
+
+      if (existencia) {
+        await tx.existencias.update({
+          where: { id_existencia: existencia.id_existencia },
+          data: {
+            cantidad: {
+              increment: item.cantidad,
+            },
+            nota: item.nota ?? existencia.nota,
+          },
+        });
+      } else {
+        await tx.existencias.create({
+          data: {
+            id_producto: item.id_producto,
+            id_bodega: remision.id_bodega,
+            cantidad: item.cantidad,
+            lote: item.lote ?? '',
+            fecha_vencimiento: item.fecha_vencimiento ?? null,
+            nota: item.nota ?? null,
+          },
+        });
+      }
+    }
+  }
+
   async create(dto: CreateRemisionCompraDto, opts: CreateOpts) {
     this.assertBodegaAccess(opts.idBodegaActiva, opts.bodegasPermitidas);
+
+    if (dto.id_bodega !== opts.idBodegaActiva) {
+      throw new ForbiddenException(
+        'La bodega de la remisión no coincide con la bodega activa',
+      );
+    }
 
     const ESTADO_INICIAL = 1;
 
@@ -209,7 +318,10 @@ export class RemisionesCompraService {
 
       await this.validarProveedor(tx, dto.id_proveedor);
       await this.validarEstadoRemision(tx, ESTADO_INICIAL);
-      await this.validarProductosEIvas(tx, dto.detalle);
+      await this.validarProductosEIvas(tx, dto.detalle_remision_compra);
+
+      this.validarCantidadesYPrecios(dto.detalle_remision_compra);
+      this.validarDetalleSinDuplicados(dto.detalle_remision_compra);
 
       if (compra.id_proveedor !== dto.id_proveedor) {
         throw new BadRequestException(
@@ -217,7 +329,13 @@ export class RemisionesCompraService {
         );
       }
 
-      this.validarDetalleContraCompra(compra, dto.detalle);
+      if (compra.id_bodega !== dto.id_bodega) {
+        throw new BadRequestException(
+          'La bodega de la remisión no coincide con la bodega de la compra',
+        );
+      }
+
+      this.validarDetalleContraCompra(compra, dto.detalle_remision_compra);
 
       const codigo_remision_compra = await this.nextCodigoRemisionCompra(
         tx,
@@ -225,7 +343,7 @@ export class RemisionesCompraService {
         4,
       );
 
-      const created = await tx.remision_compra.create({
+      return tx.remision_compra.create({
         data: {
           codigo_remision_compra,
           fecha_creacion: new Date(),
@@ -235,11 +353,15 @@ export class RemisionesCompraService {
           observaciones: dto.observaciones ?? null,
           id_compra: dto.id_compra,
           id_proveedor: dto.id_proveedor,
+          id_bodega: dto.id_bodega,
           id_estado_remision_compra: ESTADO_INICIAL,
           id_usuario_creador: opts.idUsuario,
-
+          id_factura: dto.id_factura ?? null,
+          afecta_existencias: false,
+          fecha_aplicacion_existencias: null,
+          id_usuario_aplico_existencias: null,
           detalle_remision_compra: {
-            create: dto.detalle.map((d) => ({
+            create: dto.detalle_remision_compra.map((d) => ({
               id_producto: d.id_producto,
               cantidad: new Prisma.Decimal(d.cantidad),
               precio_unitario: new Prisma.Decimal(d.precio_unitario),
@@ -255,8 +377,6 @@ export class RemisionesCompraService {
         },
         select: remisionCompraDetailSelect,
       });
-
-      return created;
     });
   }
 
@@ -270,9 +390,7 @@ export class RemisionesCompraService {
     return this.prisma.remision_compra.findMany({
       where: {
         ...(args.idCompra ? { id_compra: args.idCompra } : {}),
-        compras: {
-          id_bodega: args.idBodegaActiva,
-        },
+        id_bodega: args.idBodegaActiva,
       },
       orderBy: { id_remision_compra: 'desc' },
       select: remisionCompraListSelect,
@@ -289,23 +407,26 @@ export class RemisionesCompraService {
       throw new NotFoundException('Remisión de compra no encontrada');
     }
 
-    const idBodega = remision.compras.id_bodega;
-
-    if (opts?.bodegasPermitidas?.length && !opts.bodegasPermitidas.includes(idBodega)) {
+    if (
+      opts?.bodegasPermitidas?.length &&
+      !opts.bodegasPermitidas.includes(remision.id_bodega)
+    ) {
       throw new ForbiddenException('No tienes acceso a esta remisión');
     }
 
     return remision;
   }
 
-  async update(
-    id: number,
-    dto: UpdateRemisionCompraDto,
-    opts: { idUsuario: number; bodegasPermitidas?: number[] },
-  ) {
+  async update(id: number, dto: UpdateRemisionCompraDto, opts: UpdateOpts) {
     const actual = await this.findOne(id, {
       bodegasPermitidas: opts.bodegasPermitidas,
     });
+
+    if (actual.afecta_existencias) {
+      throw new BadRequestException(
+        'La remisión ya aplicó existencias y no puede editarse',
+      );
+    }
 
     return this.prisma.$transaction(async (tx) => {
       if (dto.id_estado_remision_compra) {
@@ -322,23 +443,35 @@ export class RemisionesCompraService {
         }
       }
 
-      if (dto.detalle?.length) {
+      if (dto.id_bodega) {
+        this.assertBodegaAccess(dto.id_bodega, opts.bodegasPermitidas);
+
+        if (dto.id_bodega !== actual.id_bodega) {
+          throw new BadRequestException(
+            'No puedes cambiar la bodega de una remisión ya asociada a una compra',
+          );
+        }
+      }
+
+      if (dto.detalle_remision_compra?.length) {
         const compra = await this.validarCompraYAcceso(
           tx,
           actual.id_compra,
-          undefined,
+          actual.id_bodega,
           opts.bodegasPermitidas,
         );
 
-        await this.validarProductosEIvas(tx, dto.detalle);
-        this.validarDetalleContraCompra(compra, dto.detalle);
+        await this.validarProductosEIvas(tx, dto.detalle_remision_compra);
+        this.validarCantidadesYPrecios(dto.detalle_remision_compra);
+        this.validarDetalleSinDuplicados(dto.detalle_remision_compra);
+        this.validarDetalleContraCompra(compra, dto.detalle_remision_compra);
 
         await tx.detalle_remision_compra.deleteMany({
           where: { id_remision_compra: id },
         });
 
         await tx.detalle_remision_compra.createMany({
-          data: dto.detalle.map((d) => ({
+          data: dto.detalle_remision_compra.map((d) => ({
             id_remision_compra: id,
             id_producto: d.id_producto,
             cantidad: new Prisma.Decimal(d.cantidad),
@@ -354,20 +487,89 @@ export class RemisionesCompraService {
         });
       }
 
-      const updated = await tx.remision_compra.update({
+      return tx.remision_compra.update({
         where: { id_remision_compra: id },
         data: {
           observaciones: dto.observaciones ?? undefined,
-          fecha_vencimiento: dto.fecha_vencimiento
-            ? new Date(dto.fecha_vencimiento)
-            : undefined,
-          id_estado_remision_compra:
-            dto.id_estado_remision_compra ?? undefined,
+          fecha_vencimiento:
+            dto.fecha_vencimiento !== undefined
+              ? dto.fecha_vencimiento
+                ? new Date(dto.fecha_vencimiento)
+                : null
+              : undefined,
+          id_estado_remision_compra: dto.id_estado_remision_compra ?? undefined,
+          id_factura: dto.id_factura !== undefined ? dto.id_factura : undefined,
         },
         select: remisionCompraDetailSelect,
       });
+    });
+  }
 
-      return updated;
+  async cambiarEstado(
+    id: number,
+    dto: CambiarEstadoRemisionCompraDto,
+    opts: UpdateOpts,
+  ) {
+    // 1. Obtenemos la remisión actual (esto ya valida si existe y si hay acceso)
+    const actual = await this.findOne(id, {
+      bodegasPermitidas: opts.bodegasPermitidas,
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      // 2. Validamos el nuevo estado que viene en el DTO
+      await this.validarEstadoRemision(tx, dto.id_estado_remision_compra);
+
+      const ESTADO_RECIBIDA = 2;
+
+      // 3. Usamos 'actual' para las validaciones de negocio
+      if (
+        dto.id_estado_remision_compra === ESTADO_RECIBIDA &&
+        actual.afecta_existencias
+      ) {
+        throw new BadRequestException(
+          'La remisión ya aplicó existencias anteriormente',
+        );
+      }
+
+      // 4. Lógica para aplicar existencias si el estado es RECIBIDA
+      if (
+        dto.id_estado_remision_compra === ESTADO_RECIBIDA &&
+        !actual.afecta_existencias
+      ) {
+        // Le pasamos 'actual' directamente a la función de existencias
+        // Nota: Asegúrate de que 'actual' tenga el detalle incluido (lo hace si usas remisionCompraDetailSelect)
+        await this.aplicarExistenciasDesdeRemision(tx, {
+          id_remision_compra: actual.id_remision_compra,
+          id_bodega: actual.id_bodega,
+          detalle_remision_compra: actual.detalle_remision_compra.map((d) => ({
+            id_producto: d.id_producto,
+            cantidad: new Prisma.Decimal(d.cantidad),
+            lote: d.lote ?? '',
+            fecha_vencimiento: d.fecha_vencimiento,
+            nota: d.nota,
+          })),
+        });
+
+        return tx.remision_compra.update({
+          where: { id_remision_compra: id },
+          data: {
+            id_estado_remision_compra: dto.id_estado_remision_compra,
+            afecta_existencias: true,
+            fecha_aplicacion_existencias: new Date(),
+            id_usuario_aplico_existencias: opts.idUsuario,
+          },
+          select: remisionCompraDetailSelect,
+        });
+      }
+
+      // 5. Cambio de estado simple si no es RECIBIDA o ya se aplicó
+      return tx.remision_compra.update({
+        where: { id_remision_compra: id },
+        data: {
+          id_estado_remision_compra: dto.id_estado_remision_compra,
+        },
+        select: remisionCompraDetailSelect,
+      });
     });
   }
 }

@@ -18,6 +18,7 @@ model bodega {
   cotizacion                                  cotizacion[]
   existencias                                 existencias[]
   orden_venta                                 orden_venta[]
+  remision_compra                             remision_compra[]
   roles                                       roles[]
   traslado_traslado_id_bodega_destinoTobodega traslado[]            @relation("traslado_id_bodega_destinoTobodega")
   traslado_traslado_id_bodega_origenTobodega  traslado[]            @relation("traslado_id_bodega_origenTobodega")
@@ -403,6 +404,7 @@ model producto {
   id_categoria_producto   Int                       @db.UnsignedInt
   id_iva                  Int                       @db.UnsignedInt
   estado                  Boolean                   @default(true)
+  cod_barras              String?                   @db.VarChar(100)
   detalle_compra          detalle_compra[]
   detalle_cotizacion      detalle_cotizacion[]
   detalle_orden_venta     detalle_orden_venta[]
@@ -440,30 +442,38 @@ model proveedor {
 }
 
 model remision_compra {
-  id_remision_compra        Int                       @id @default(autoincrement()) @db.UnsignedInt
-  codigo_remision_compra    String                    @unique(map: "codigo_remision_compra") @db.VarChar(20)
-  fecha_creacion            DateTime                  @db.Date
-  fecha_vencimiento         DateTime?                 @db.Date
-  observaciones             String?                   @db.VarChar(255)
-  id_compra                 Int                       @db.UnsignedInt
-  id_proveedor              Int                       @db.UnsignedInt
-  id_estado_remision_compra Int                       @db.UnsignedInt
-  id_usuario_creador        Int                       @db.UnsignedInt
-  id_factura                Int?                      @db.UnsignedInt
-  firma_digital             Bytes?
-  nombre_firmante           String?                   @db.VarChar(150)
-  fecha_firma               DateTime?                 @db.DateTime(0)
-  detalle_remision_compra   detalle_remision_compra[]
-  compras                   compras                   @relation(fields: [id_compra], references: [id_compra], map: "fk_remision_compra_compra")
-  estado_remision_compra    estado_remision_compra    @relation(fields: [id_estado_remision_compra], references: [id_estado_remision_compra], map: "fk_remision_compra_estado")
-  proveedor                 proveedor                 @relation(fields: [id_proveedor], references: [id_proveedor], map: "fk_remision_compra_proveedor")
-  usuario                   usuario                   @relation(fields: [id_usuario_creador], references: [id_usuario], map: "fk_remision_compra_usuario")
+  id_remision_compra                                             Int                       @id @default(autoincrement()) @db.UnsignedInt
+  codigo_remision_compra                                         String                    @unique(map: "codigo_remision_compra") @db.VarChar(20)
+  fecha_creacion                                                 DateTime                  @db.Date
+  fecha_vencimiento                                              DateTime?                 @db.Date
+  observaciones                                                  String?                   @db.VarChar(255)
+  id_compra                                                      Int                       @db.UnsignedInt
+  id_proveedor                                                   Int                       @db.UnsignedInt
+  id_estado_remision_compra                                      Int                       @db.UnsignedInt
+  id_usuario_creador                                             Int                       @db.UnsignedInt
+  id_factura                                                     Int?                      @db.UnsignedInt
+  firma_digital                                                  Bytes?
+  nombre_firmante                                                String?                   @db.VarChar(150)
+  fecha_firma                                                    DateTime?                 @db.DateTime(0)
+  afecta_existencias                                             Boolean                   @default(false)
+  fecha_aplicacion_existencias                                   DateTime?                 @db.DateTime(0)
+  id_usuario_aplico_existencias                                  Int?                      @db.UnsignedInt
+  id_bodega                                                      Int                       @db.UnsignedInt
+  detalle_remision_compra                                        detalle_remision_compra[]
+  bodega                                                         bodega                    @relation(fields: [id_bodega], references: [id_bodega], onDelete: NoAction, onUpdate: NoAction, map: "fk_remision_compra_bodega")
+  compras                                                        compras                   @relation(fields: [id_compra], references: [id_compra], map: "fk_remision_compra_compra")
+  estado_remision_compra                                         estado_remision_compra    @relation(fields: [id_estado_remision_compra], references: [id_estado_remision_compra], map: "fk_remision_compra_estado")
+  proveedor                                                      proveedor                 @relation(fields: [id_proveedor], references: [id_proveedor], map: "fk_remision_compra_proveedor")
+  usuario                                                        usuario                   @relation(fields: [id_usuario_creador], references: [id_usuario], map: "fk_remision_compra_usuario")
+  usuario_remision_compra_id_usuario_aplico_existenciasTousuario usuario?                  @relation("remision_compra_id_usuario_aplico_existenciasTousuario", fields: [id_usuario_aplico_existencias], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction, map: "fk_remision_compra_usuario_aplico_existencias")
 
   @@index([id_estado_remision_compra], map: "fk_remision_compra_estado")
   @@index([id_proveedor], map: "fk_remision_compra_proveedor")
   @@index([id_usuario_creador], map: "fk_remision_compra_usuario")
   @@index([id_compra], map: "idx_remision_compra_compra")
   @@index([fecha_creacion], map: "idx_remision_compra_fecha")
+  @@index([id_bodega], map: "idx_remision_compra_bodega")
+  @@index([id_usuario_aplico_existencias], map: "idx_remision_compra_usuario_aplico_existencias")
 }
 
 model remision_venta {
@@ -567,29 +577,30 @@ model traslado {
 }
 
 model usuario {
-  id_usuario          Int                   @id @default(autoincrement()) @db.UnsignedInt
-  nombre              String                @db.VarChar(100)
-  apellido            String                @db.VarChar(100)
-  id_tipo_doc         Int                   @db.UnsignedInt
-  num_documento       String                @unique(map: "num_documento") @db.VarChar(20)
-  email               String                @unique(map: "email") @db.VarChar(100)
-  contrasena          String                @db.VarChar(255)
-  id_rol              Int                   @db.UnsignedInt
-  estado              Boolean               @default(true)
-  telefono            String?               @db.VarChar(30)
-  fecha_nacimiento    DateTime?             @db.Date
-  img_url             String?               @db.VarChar(500)
-  id_genero           Int?                  @db.UnsignedInt
-  bodegas_por_usuario bodegas_por_usuario[]
-  compras             compras[]
-  cotizacion          cotizacion[]
-  orden_venta         orden_venta[]
-  remision_compra     remision_compra[]
-  remision_venta      remision_venta[]
-  traslado            traslado[]
-  genero              genero?               @relation(fields: [id_genero], references: [id_genero], map: "fk_usuario_genero")
-  roles               roles                 @relation(fields: [id_rol], references: [id_rol], map: "fk_usuario_rol")
-  tipo_documento      tipo_documento        @relation(fields: [id_tipo_doc], references: [id_tipo_doc], map: "fk_usuario_tipo_doc")
+  id_usuario                                                             Int                   @id @default(autoincrement()) @db.UnsignedInt
+  nombre                                                                 String                @db.VarChar(100)
+  apellido                                                               String                @db.VarChar(100)
+  id_tipo_doc                                                            Int                   @db.UnsignedInt
+  num_documento                                                          String                @unique(map: "num_documento") @db.VarChar(20)
+  email                                                                  String                @unique(map: "email") @db.VarChar(100)
+  contrasena                                                             String                @db.VarChar(255)
+  id_rol                                                                 Int                   @db.UnsignedInt
+  estado                                                                 Boolean               @default(true)
+  telefono                                                               String?               @db.VarChar(30)
+  fecha_nacimiento                                                       DateTime?             @db.Date
+  img_url                                                                String?               @db.VarChar(500)
+  id_genero                                                              Int?                  @db.UnsignedInt
+  bodegas_por_usuario                                                    bodegas_por_usuario[]
+  compras                                                                compras[]
+  cotizacion                                                             cotizacion[]
+  orden_venta                                                            orden_venta[]
+  remision_compra                                                        remision_compra[]
+  remision_compra_remision_compra_id_usuario_aplico_existenciasTousuario remision_compra[]     @relation("remision_compra_id_usuario_aplico_existenciasTousuario")
+  remision_venta                                                         remision_venta[]
+  traslado                                                               traslado[]
+  genero                                                                 genero?               @relation(fields: [id_genero], references: [id_genero], map: "fk_usuario_genero")
+  roles                                                                  roles                 @relation(fields: [id_rol], references: [id_rol], map: "fk_usuario_rol")
+  tipo_documento                                                         tipo_documento        @relation(fields: [id_tipo_doc], references: [id_tipo_doc], map: "fk_usuario_tipo_doc")
 
   @@index([id_rol], map: "fk_usuario_rol")
   @@index([id_tipo_doc], map: "fk_usuario_tipo_doc")
