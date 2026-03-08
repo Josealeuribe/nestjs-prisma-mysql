@@ -13,6 +13,7 @@ import {
 import { RolesService } from './roles.service';
 import { CreateRolDto } from './dto/create-rol.dto';
 import { UpdateRolDto } from './dto/update-rol.dto';
+import { AsignarPermisosRolDto } from './dto/asignar-permisos-rol.dto';
 
 @Controller('roles')
 export class RolesController {
@@ -40,6 +41,14 @@ export class RolesController {
   @Patch(':id')
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateRolDto) {
     return this.service.update(id, dto);
+  }
+
+  @Patch(':id/permisos')
+  asignarPermisos(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AsignarPermisosRolDto,
+  ) {
+    return this.service.asignarPermisos(id, dto);
   }
 
   // Soft delete (desactivar)

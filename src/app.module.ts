@@ -11,6 +11,7 @@ import { ComprasModule } from './modules/compras/compras.module';
 import { VentasModule } from './modules/ventas/ventas.module';
 import { ConfiguracionModule } from './modules/configuracion/configuracion.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
+import { PermisosModule } from './modules/permisos/permisos.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
     VentasModule,
     ConfiguracionModule,
     UsuariosModule,
+    PermisosModule,
   ],
   controllers: [AppController],
   providers: [AppService],
