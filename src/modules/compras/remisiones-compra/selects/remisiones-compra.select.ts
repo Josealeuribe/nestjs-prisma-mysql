@@ -133,7 +133,7 @@ export const remisionCompraDetailSelect =
         id_iva: true,
         lote: true,
         fecha_vencimiento: true,
-        cod_barras: true,
+        codigo_barras: true,
         nota: true,
 
         producto: {

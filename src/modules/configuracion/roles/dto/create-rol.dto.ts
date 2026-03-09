@@ -1,18 +1,32 @@
 import {
   IsBoolean,
-  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
+  MinLength,
+  IsInt,
+  Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateRolDto {
-  @IsNotEmpty()
   @IsString()
   @MaxLength(50)
+  @MinLength(3)
   nombre_rol: string;
+
+  @IsString()
+  @MaxLength(200)
+  @MinLength(10)
+  descripcion: string;
 
   @IsOptional()
   @IsBoolean()
-  estado?: boolean; // si no viene, Prisma pone true por default
+  estado?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  ids_permisos?: number[];
 }

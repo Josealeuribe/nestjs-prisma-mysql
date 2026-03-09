@@ -31,7 +31,7 @@ type UpdateOpts = {
 
 @Injectable()
 export class RemisionesCompraService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   private assertBodegaAccess(idBodega: number, bodegasPermitidas?: number[]) {
     if (!idBodega || Number.isNaN(idBodega)) {
@@ -370,7 +370,7 @@ export class RemisionesCompraService {
               fecha_vencimiento: d.fecha_vencimiento
                 ? new Date(d.fecha_vencimiento)
                 : null,
-              cod_barras: d.cod_barras ?? null,
+              codigo_barras: d.codigo_barras ?? null,
               nota: d.nota ?? null,
             })),
           },
@@ -409,9 +409,12 @@ export class RemisionesCompraService {
 
     if (
       opts?.bodegasPermitidas?.length &&
+      remision.id_bodega !== null &&
       !opts.bodegasPermitidas.includes(remision.id_bodega)
     ) {
-      throw new ForbiddenException('No tienes acceso a esta remisión');
+      throw new ForbiddenException(
+        'No tienes acceso a la bodega de esta remisión.',
+      );
     }
 
     return remision;
@@ -457,7 +460,7 @@ export class RemisionesCompraService {
         const compra = await this.validarCompraYAcceso(
           tx,
           actual.id_compra,
-          actual.id_bodega,
+          actual.id_bodega ?? undefined,
           opts.bodegasPermitidas,
         );
 
@@ -481,7 +484,7 @@ export class RemisionesCompraService {
             fecha_vencimiento: d.fecha_vencimiento
               ? new Date(d.fecha_vencimiento)
               : null,
-            cod_barras: d.cod_barras ?? null,
+            codigo_barras: d.codigo_barras ?? null,
             nota: d.nota ?? null,
           })),
         });
@@ -498,7 +501,8 @@ export class RemisionesCompraService {
                 : null
               : undefined,
           id_estado_remision_compra: dto.id_estado_remision_compra ?? undefined,
-          id_factura: dto.id_factura !== undefined ? dto.id_factura : undefined,
+          id_factura:
+            dto.id_factura !== undefined ? dto.id_factura : undefined,
         },
         select: remisionCompraDetailSelect,
       });
@@ -510,18 +514,15 @@ export class RemisionesCompraService {
     dto: CambiarEstadoRemisionCompraDto,
     opts: UpdateOpts,
   ) {
-    // 1. Obtenemos la remisión actual (esto ya valida si existe y si hay acceso)
     const actual = await this.findOne(id, {
       bodegasPermitidas: opts.bodegasPermitidas,
     });
 
     return this.prisma.$transaction(async (tx) => {
-      // 2. Validamos el nuevo estado que viene en el DTO
       await this.validarEstadoRemision(tx, dto.id_estado_remision_compra);
 
       const ESTADO_RECIBIDA = 2;
 
-      // 3. Usamos 'actual' para las validaciones de negocio
       if (
         dto.id_estado_remision_compra === ESTADO_RECIBIDA &&
         actual.afecta_existencias
@@ -531,13 +532,16 @@ export class RemisionesCompraService {
         );
       }
 
-      // 4. Lógica para aplicar existencias si el estado es RECIBIDA
       if (
         dto.id_estado_remision_compra === ESTADO_RECIBIDA &&
         !actual.afecta_existencias
       ) {
-        // Le pasamos 'actual' directamente a la función de existencias
-        // Nota: Asegúrate de que 'actual' tenga el detalle incluido (lo hace si usas remisionCompraDetailSelect)
+        if (actual.id_bodega === null) {
+          throw new BadRequestException(
+            'La remisión no tiene una bodega asociada para aplicar existencias',
+          );
+        }
+
         await this.aplicarExistenciasDesdeRemision(tx, {
           id_remision_compra: actual.id_remision_compra,
           id_bodega: actual.id_bodega,
@@ -562,7 +566,6 @@ export class RemisionesCompraService {
         });
       }
 
-      // 5. Cambio de estado simple si no es RECIBIDA o ya se aplicó
       return tx.remision_compra.update({
         where: { id_remision_compra: id },
         data: {

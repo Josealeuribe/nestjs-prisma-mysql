@@ -19,7 +19,6 @@ model bodega {
   existencias                                 existencias[]
   orden_venta                                 orden_venta[]
   remision_compra                             remision_compra[]
-  roles                                       roles[]
   traslado_traslado_id_bodega_destinoTobodega traslado[]            @relation("traslado_id_bodega_destinoTobodega")
   traslado_traslado_id_bodega_origenTobodega  traslado[]            @relation("traslado_id_bodega_origenTobodega")
 
@@ -29,6 +28,7 @@ model bodega {
 model bodegas_por_usuario {
   id_usuario Int     @db.UnsignedInt
   id_bodega  Int     @db.UnsignedInt
+  estado     Boolean @default(true)
   bodega     bodega  @relation(fields: [id_bodega], references: [id_bodega], map: "fk_bpu_bodega")
   usuario    usuario @relation(fields: [id_usuario], references: [id_usuario], map: "fk_bpu_usuario")
 
@@ -78,10 +78,10 @@ model compras {
   subtotal           Decimal           @default(0.00) @db.Decimal(10, 2)
   total_iva          Decimal           @default(0.00) @db.Decimal(10, 2)
   total              Decimal           @default(0.00) @db.Decimal(10, 2)
+  fecha_entrega      DateTime?         @db.Date
   id_estado_compra   Int               @db.UnsignedInt
   id_usuario_creador Int               @db.UnsignedInt
   id_bodega          Int               @db.UnsignedInt
-  fecha_entrega      DateTime?         @db.Date
   bodega             bodega            @relation(fields: [id_bodega], references: [id_bodega], map: "fk_compra_bodega")
   estado_compra      estado_compra     @relation(fields: [id_estado_compra], references: [id_estado_compra], map: "fk_compra_estado")
   proveedor          proveedor         @relation(fields: [id_proveedor], references: [id_proveedor], map: "fk_compra_proveedor")
@@ -145,7 +145,7 @@ model detalle_compra {
 
   @@id([id_compra, id_producto])
   @@index([id_iva], map: "fk_dc_iva")
-  @@index([id_producto], map: "fk_dc_producto")
+  @@index([id_producto], map: "idx_detalle_compra_producto")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -192,8 +192,8 @@ model detalle_remision_compra {
   id_iva                     Int             @db.UnsignedInt
   lote                       String          @default("") @db.VarChar(50)
   fecha_vencimiento          DateTime?       @db.Date
-  cod_barras                 String?         @db.VarChar(100)
   nota                       String?         @db.VarChar(255)
+  codigo_barras              String?         @db.VarChar(100)
   iva                        iva             @relation(fields: [id_iva], references: [id_iva], map: "fk_drc_iva")
   producto                   producto        @relation(fields: [id_producto], references: [id_producto], map: "fk_drc_producto")
   remision_compra            remision_compra @relation(fields: [id_remision_compra], references: [id_remision_compra], onDelete: Cascade, map: "fk_drc_remision")
@@ -201,7 +201,7 @@ model detalle_remision_compra {
   @@index([id_iva], map: "fk_drc_iva")
   @@index([id_producto], map: "idx_drc_producto")
   @@index([id_remision_compra], map: "idx_drc_remision")
-  @@index([cod_barras], map: "idx_det_rem_compra_cod_barras")
+  @@index([codigo_barras], map: "idx_det_rem_compra_codigo_barras")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -400,11 +400,10 @@ model producto {
   codigo_producto         String?                   @unique(map: "codigo_producto") @db.VarChar(20)
   nombre_producto         String                    @db.VarChar(150)
   descripcion             String?                   @db.VarChar(255)
-  codigo_barras           String?                   @unique(map: "codigo_barras") @db.VarChar(50)
+  codigo_barras           String?                   @unique(map: "uq_producto_codigo_barras") @db.VarChar(100)
   id_categoria_producto   Int                       @db.UnsignedInt
   id_iva                  Int                       @db.UnsignedInt
   estado                  Boolean                   @default(true)
-  cod_barras              String?                   @db.VarChar(100)
   detalle_compra          detalle_compra[]
   detalle_cotizacion      detalle_cotizacion[]
   detalle_orden_venta     detalle_orden_venta[]
@@ -458,14 +457,14 @@ model remision_compra {
   afecta_existencias                                             Boolean                   @default(false)
   fecha_aplicacion_existencias                                   DateTime?                 @db.DateTime(0)
   id_usuario_aplico_existencias                                  Int?                      @db.UnsignedInt
-  id_bodega                                                      Int                       @db.UnsignedInt
+  id_bodega                                                      Int?                      @db.UnsignedInt
   detalle_remision_compra                                        detalle_remision_compra[]
-  bodega                                                         bodega                    @relation(fields: [id_bodega], references: [id_bodega], onDelete: NoAction, onUpdate: NoAction, map: "fk_remision_compra_bodega")
+  bodega                                                         bodega?                   @relation(fields: [id_bodega], references: [id_bodega], onDelete: Restrict, map: "fk_remision_compra_bodega")
   compras                                                        compras                   @relation(fields: [id_compra], references: [id_compra], map: "fk_remision_compra_compra")
   estado_remision_compra                                         estado_remision_compra    @relation(fields: [id_estado_remision_compra], references: [id_estado_remision_compra], map: "fk_remision_compra_estado")
   proveedor                                                      proveedor                 @relation(fields: [id_proveedor], references: [id_proveedor], map: "fk_remision_compra_proveedor")
   usuario                                                        usuario                   @relation(fields: [id_usuario_creador], references: [id_usuario], map: "fk_remision_compra_usuario")
-  usuario_remision_compra_id_usuario_aplico_existenciasTousuario usuario?                  @relation("remision_compra_id_usuario_aplico_existenciasTousuario", fields: [id_usuario_aplico_existencias], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction, map: "fk_remision_compra_usuario_aplico_existencias")
+  usuario_remision_compra_id_usuario_aplico_existenciasTousuario usuario?                  @relation("remision_compra_id_usuario_aplico_existenciasTousuario", fields: [id_usuario_aplico_existencias], references: [id_usuario], onDelete: Restrict, map: "fk_remision_compra_usuario_aplico_existencias")
 
   @@index([id_estado_remision_compra], map: "fk_remision_compra_estado")
   @@index([id_proveedor], map: "fk_remision_compra_proveedor")
@@ -506,15 +505,12 @@ model remision_venta {
 }
 
 model roles {
-  id_rol            Int              @id @default(autoincrement()) @db.UnsignedInt
-  nombre_rol        String           @unique(map: "nombre_rol") @db.VarChar(50)
-  estado            Boolean          @default(true)
-  id_bodega_default Int?             @db.UnsignedInt
-  bodega            bodega?          @relation(fields: [id_bodega_default], references: [id_bodega], map: "fk_roles_bodega_default")
-  roles_permisos    roles_permisos[]
-  usuario           usuario[]
-
-  @@index([id_bodega_default], map: "fk_roles_bodega_default")
+  id_rol         Int              @id @default(autoincrement()) @db.UnsignedInt
+  nombre_rol     String           @unique(map: "nombre_rol") @db.VarChar(50)
+  estado         Boolean          @default(true)
+  descripcion    String           @default("") @db.VarChar(200)
+  roles_permisos roles_permisos[]
+  usuario        usuario[]
 }
 
 model roles_permisos {
@@ -556,13 +552,13 @@ model tipo_proveedor {
 
 model traslado {
   id_traslado                               Int                @id @default(autoincrement()) @db.UnsignedInt
+  codigo_traslado                           String?            @unique(map: "codigo_traslado") @db.VarChar(20)
   id_bodega_origen                          Int                @db.UnsignedInt
   id_bodega_destino                         Int                @db.UnsignedInt
   fecha_traslado                            DateTime           @db.Date
   nota                                      String?            @db.VarChar(255)
   id_estado_traslado                        Int                @db.UnsignedInt
   id_responsable                            Int?               @db.UnsignedInt
-  codigo_traslado                           String?            @unique(map: "codigo_traslado") @db.VarChar(20)
   detalle_traslado                          detalle_traslado[]
   bodega_traslado_id_bodega_destinoTobodega bodega             @relation("traslado_id_bodega_destinoTobodega", fields: [id_bodega_destino], references: [id_bodega], map: "fk_traslado_destino")
   estado_traslado                           estado_traslado    @relation(fields: [id_estado_traslado], references: [id_estado_traslado], map: "fk_traslado_estado")

@@ -18,7 +18,16 @@ const usuarioLoginArgs = Prisma.validator<Prisma.usuarioDefaultArgs>()({
         id_rol: true,
         nombre_rol: true,
         estado: true,
-        id_bodega_default: true,
+        roles_permisos: {
+          select: {
+            permisos: {
+              select: {
+                id_permiso: true,
+                nombre_permiso: true,
+              },
+            },
+          },
+        },
       },
     },
     bodegas_por_usuario: {
@@ -32,7 +41,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
-  ) {}
+  ) { }
 
   async login(email: string, plainPassword: string) {
     const user = await this.prisma.usuario.findUnique({
@@ -40,13 +49,21 @@ export class AuthService {
       ...usuarioLoginArgs,
     });
 
-    if (!user) throw new UnauthorizedException('Credenciales inválidas');
-    if (!user.estado) throw new UnauthorizedException('Usuario inactivo');
+    if (!user) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    if (!user.estado) {
+      throw new UnauthorizedException('Usuario inactivo');
+    }
 
     const ok = await bcrypt.compare(plainPassword, user.contrasena);
-    if (!ok) throw new UnauthorizedException('Credenciales inválidas');
+    if (!ok) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
 
     const bodegas = user.bodegas_por_usuario.map((x) => x.bodega);
+
     if (bodegas.length === 0) {
       throw new UnauthorizedException('Usuario sin bodegas asignadas');
     }
@@ -55,11 +72,6 @@ export class AuthService {
 
     if (bodegas.length === 1) {
       id_bodega_activa = bodegas[0].id_bodega;
-    } else {
-      const idDefault = user.roles?.id_bodega_default ?? null;
-      if (idDefault && bodegas.some((b) => b.id_bodega === idDefault)) {
-        id_bodega_activa = idDefault;
-      }
     }
 
     const requiereSeleccion = id_bodega_activa === null;
@@ -75,14 +87,54 @@ export class AuthService {
 
     const { contrasena, ...safeUser } = user;
 
+    const permisos = user.roles.roles_permisos.map((rp) => rp.permisos);
+
     return {
       access_token,
       user: {
         ...safeUser,
         id_bodega_activa,
         requiereSeleccion,
-        bodegas, // devuelve bodegas completas (sin adivinar nombre)
+        bodegas,
+        permisos,
       },
+    };
+  }
+
+  async getMe(idUsuario: number) {
+    const user = await this.prisma.usuario.findUnique({
+      where: { id_usuario: idUsuario },
+      ...usuarioLoginArgs,
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Usuario no encontrado');
+    }
+
+    if (!user.estado) {
+      throw new UnauthorizedException('Usuario inactivo');
+    }
+
+    const bodegas = user.bodegas_por_usuario.map((x) => x.bodega);
+
+    let id_bodega_activa: number | null = null;
+
+    if (bodegas.length === 1) {
+      id_bodega_activa = bodegas[0].id_bodega;
+    }
+
+    const requiereSeleccion = id_bodega_activa === null;
+
+    const { contrasena, ...safeUser } = user;
+
+    const permisos = user.roles.roles_permisos.map((rp) => rp.permisos);
+
+    return {
+      ...safeUser,
+      id_bodega_activa,
+      requiereSeleccion,
+      bodegas,
+      permisos,
     };
   }
 }

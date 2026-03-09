@@ -13,6 +13,7 @@ import {
 import { RolesService } from './roles.service';
 import { CreateRolDto } from './dto/create-rol.dto';
 import { UpdateRolDto } from './dto/update-rol.dto';
+import { AsignarPermisosRolDto } from './dto/asignar-permisos-rol.dto';
 
 @Controller('roles')
 export class RolesController {
@@ -23,7 +24,6 @@ export class RolesController {
     return this.service.create(dto);
   }
 
-  // /roles?incluirInactivos=true
   @Get()
   findAll(
     @Query('incluirInactivos', new ParseBoolPipe({ optional: true }))
@@ -42,7 +42,14 @@ export class RolesController {
     return this.service.update(id, dto);
   }
 
-  // Soft delete (desactivar)
+  @Patch(':id/permisos')
+  asignarPermisos(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AsignarPermisosRolDto,
+  ) {
+    return this.service.asignarPermisos(id, dto.ids_permisos);
+  }
+
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);
