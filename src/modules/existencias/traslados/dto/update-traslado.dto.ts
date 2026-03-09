@@ -1,4 +1,3 @@
-import { PartialType } from '@nestjs/mapped-types';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
@@ -13,6 +12,7 @@ import {
 } from 'class-validator';
 import { CreateTrasladoDto } from './create-traslado.dto';
 import { DetalleTrasladoItemDto } from './detalle-traslado-item.dto';
+import { PartialType } from '@nestjs/swagger';
 
 export class UpdateTrasladoDto extends PartialType(CreateTrasladoDto) {
   @IsOptional()

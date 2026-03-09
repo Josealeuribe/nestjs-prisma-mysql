@@ -1,4 +1,4 @@
-import { PartialType } from '@nestjs/mapped-types';
+import { PartialType } from '@nestjs/swagger';
 import { IsInt, IsOptional, Min } from 'class-validator';
 import { CreateRemisionCompraDto } from './create-remision-compra.dto';
 
