@@ -1,4 +1,8 @@
-import { PartialType } from '@nestjs/swagger';
-import { CreatePermisoDto } from './create-permiso.dto';
+import { IsOptional, IsString, Length } from 'class-validator';
 
-export class UpdatePermisoDto extends PartialType(CreatePermisoDto) {}
+export class UpdatePermisoDto {
+  @IsOptional()
+  @IsString()
+  @Length(3, 120)
+  nombre_permiso?: string;
+}

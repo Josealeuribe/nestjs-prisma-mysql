@@ -1,11 +1,9 @@
-import { ArrayNotEmpty, ArrayUnique, IsArray, IsInt } from 'class-validator';
-import { Type } from 'class-transformer';
+import { ArrayUnique, IsArray, IsInt, Min } from 'class-validator';
 
 export class AsignarPermisosRolDto {
   @IsArray()
   @ArrayUnique()
-  @ArrayNotEmpty()
-  @Type(() => Number)
   @IsInt({ each: true })
-  permisosIds: number[];
+  @Min(1, { each: true })
+  ids_permisos: number[];
 }

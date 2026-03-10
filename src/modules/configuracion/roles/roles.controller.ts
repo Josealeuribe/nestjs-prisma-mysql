@@ -24,7 +24,6 @@ export class RolesController {
     return this.service.create(dto);
   }
 
-  // /roles?incluirInactivos=true
   @Get()
   findAll(
     @Query('incluirInactivos', new ParseBoolPipe({ optional: true }))
@@ -51,7 +50,6 @@ export class RolesController {
     return this.service.asignarPermisos(id, dto);
   }
 
-  // Soft delete (desactivar)
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);

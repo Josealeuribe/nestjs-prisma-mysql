@@ -508,6 +508,7 @@ model remision_venta {
 model roles {
   id_rol            Int              @id @default(autoincrement()) @db.UnsignedInt
   nombre_rol        String           @unique(map: "nombre_rol") @db.VarChar(50)
+  descripcion       String?          @db.VarChar(200)
   estado            Boolean          @default(true)
   id_bodega_default Int?             @db.UnsignedInt
   bodega            bodega?          @relation(fields: [id_bodega_default], references: [id_bodega], map: "fk_roles_bodega_default")
