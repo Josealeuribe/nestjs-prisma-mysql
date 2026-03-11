@@ -12,6 +12,10 @@ import { VentasModule } from './modules/ventas/ventas.module';
 import { ConfiguracionModule } from './modules/configuracion/configuracion.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { PermisosModule } from './modules/permisos/permisos.module';
+import { CatalogosModule } from './modules/catalogos/catalogos.module';
+import { TipoDocumentoModule } from './modules/tipo-documento/tipo-documento.module';
+import { TipoProveedorModule } from './modules/tipo-proveedor/tipo-proveedor.module';
+import { MunicipioModule } from './modules/municipios/municipio.module';
 
 @Module({
   imports: [
@@ -24,6 +28,10 @@ import { PermisosModule } from './modules/permisos/permisos.module';
     ConfiguracionModule,
     UsuariosModule,
     PermisosModule,
+    CatalogosModule,
+    TipoDocumentoModule,
+    TipoProveedorModule,
+    MunicipioModule,
   ],
   controllers: [AppController],
   providers: [AppService],

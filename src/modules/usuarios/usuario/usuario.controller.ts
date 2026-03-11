@@ -21,13 +21,11 @@ import { JwtAuthGuard } from 'src/modules/auth/login/jwt/jwt-auth.guard';
 export class UsuarioController {
   constructor(private readonly service: UsuarioService) {}
 
-  // Get/usuarios
   @Get()
   findAll(@Query() query: ListUsuarioQueryDto) {
     return this.service.findAll(query);
   }
 
-  // Get/usuarios/:id
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
@@ -39,7 +37,7 @@ export class UsuarioController {
   }
 
   @Patch(':id')
-  Update(
+  update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ActualizarUsuarioDto,
   ) {

@@ -1,5 +1,3 @@
-import { Prisma } from '@prisma/client';
-
 export const usuarioSelect = {
   id_usuario: true,
   nombre: true,
@@ -13,4 +11,37 @@ export const usuarioSelect = {
   fecha_nacimiento: true,
   img_url: true,
   id_genero: true,
-} satisfies Prisma.usuarioSelect; // si falla, usa Prisma.UsuarioSelect
+
+  roles: {
+    select: {
+      id_rol: true,
+      nombre_rol: true,
+    },
+  },
+
+  tipo_documento: {
+    select: {
+      id_tipo_doc: true,
+      nombre_doc: true,
+    },
+  },
+
+  genero: {
+    select: {
+      id_genero: true,
+      nombre_genero: true,
+    },
+  },
+
+  bodegas_por_usuario: {
+    select: {
+      id_bodega: true,
+      bodega: {
+        select: {
+          id_bodega: true,
+          nombre_bodega: true,
+        },
+      },
+    },
+  },
+} as const;

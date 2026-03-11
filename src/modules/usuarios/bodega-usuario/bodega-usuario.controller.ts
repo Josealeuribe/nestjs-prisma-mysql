@@ -1,53 +1,43 @@
 import {
-  Body,
   Controller,
   Delete,
   Get,
   Param,
   ParseIntPipe,
   Post,
-  Req,
+  Body,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import type { Request } from 'express';
-import { AsignarBodegaUsuarioDto } from './dto/asignar-bodega-usuario.dto';
+
+import { JwtAuthGuard } from 'src/modules/auth/login/jwt/jwt-auth.guard';
 import { BodegasPorUsuarioService } from './bodega-usuario.service';
+import { AsignarBodegaUsuarioDto } from './dto/asignar-bodega-usuario.dto';
 
-type JwtUser = {
-  sub: number;
-  id_rol?: number;
-  id_bodega_activa?: number | null;
-};
-
+@UseGuards(JwtAuthGuard)
 @Controller('bodegas-por-usuario')
 export class BodegasPorUsuarioController {
   constructor(private readonly service: BodegasPorUsuarioService) {}
 
-  @Post('asignar')
-  asignar(@Body() dto: AsignarBodegaUsuarioDto) {
-    return this.service.asignar(dto);
+  @Get()
+  findAll() {
+    return this.service.findAll();
   }
 
-  // ✅ PRIMERO las rutas fijas
-  @UseGuards(AuthGuard('jwt'))
-  @Get('mis-bodegas')
-  misBodegas(@Req() req: Request) {
-    const user = req.user as JwtUser;
-    return this.service.misBodegas(user.sub);
+  @Get('usuario/:idUsuario')
+  findByUsuario(@Param('idUsuario', ParseIntPipe) idUsuario: number) {
+    return this.service.findByUsuario(idUsuario);
   }
 
-  // ✅ DESPUÉS las rutas dinámicas
-  @Get(':id_usuario')
-  bodegasDeUsuario(@Param('id_usuario', ParseIntPipe) id_usuario: number) {
-    return this.service.bodegasDeUsuario(id_usuario);
+  @Post()
+  create(@Body() dto: AsignarBodegaUsuarioDto) {
+    return this.service.create(dto);
   }
 
-  @Delete('usuario/:id_usuario/:id_bodega')
-  quitar(
-    @Param('id_usuario', ParseIntPipe) id_usuario: number,
-    @Param('id_bodega', ParseIntPipe) id_bodega: number,
+  @Delete(':idUsuario/:idBodega')
+  remove(
+    @Param('idUsuario', ParseIntPipe) idUsuario: number,
+    @Param('idBodega', ParseIntPipe) idBodega: number,
   ) {
-    return this.service.quitar(id_usuario, id_bodega);
+    return this.service.remove(idUsuario, idBodega);
   }
 }

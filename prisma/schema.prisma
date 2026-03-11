@@ -26,15 +26,15 @@ model bodega {
   @@index([id_municipio], map: "fk_bodega_municipio")
 }
 
-model bodegas_por_usuario {
-  id_usuario Int     @db.UnsignedInt
-  id_bodega  Int     @db.UnsignedInt
-  bodega     bodega  @relation(fields: [id_bodega], references: [id_bodega], map: "fk_bpu_bodega")
-  usuario    usuario @relation(fields: [id_usuario], references: [id_usuario], map: "fk_bpu_usuario")
+  model bodegas_por_usuario {
+    id_usuario Int     @db.UnsignedInt
+    id_bodega  Int     @db.UnsignedInt
+    bodega     bodega  @relation(fields: [id_bodega], references: [id_bodega], map: "fk_bpu_bodega")
+    usuario    usuario @relation(fields: [id_usuario], references: [id_usuario], map: "fk_bpu_usuario")
 
-  @@id([id_usuario, id_bodega])
-  @@index([id_bodega], map: "fk_bpu_bodega")
-}
+    @@id([id_usuario, id_bodega])
+    @@index([id_bodega], map: "fk_bpu_bodega")
+  }
 
 model categoria_producto {
   id_categoria_producto Int        @id @default(autoincrement()) @db.UnsignedInt
