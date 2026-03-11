@@ -1,4 +1,3 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CrearUsuarioDto } from './dto/crear-usuario.dto';
 import { ActualizarUsuarioDto } from './dto/actualizar-usuario.dto';
@@ -6,6 +5,18 @@ import * as bcrypt from 'bcrypt';
 import { usuarioSelect } from './selects/usuario.select';
 import { Prisma } from '@prisma/client';
 import { ListUsuarioQueryDto } from './dto/list-usuario.query.dto';
+import { MailService } from 'src/modules/mail/mail.service';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  generarClaveTemporal,
+  generarTokenPlano,
+  hashToken,
+} from 'src/common/utils/password-setup.util';
+
 
 export type UsuarioPayload = Prisma.usuarioGetPayload<{
   select: typeof usuarioSelect;
@@ -14,16 +25,29 @@ export type UsuarioPayload = Prisma.usuarioGetPayload<{
 export type UsuariosFindAllResponse =
   | UsuarioPayload[]
   | {
-      page: number;
-      limit: number;
-      total: number;
-      pages: number;
-      data: UsuarioPayload[];
-    };
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+    data: UsuarioPayload[];
+  };
+
+type PrismaKnownError = { code: string; meta?: unknown };
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isPrismaKnownError(e: unknown): e is PrismaKnownError {
+  return isObject(e) && typeof e['code'] === 'string';
+}
 
 @Injectable()
 export class UsuarioService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) { }
 
   async findAll(
     query: ListUsuarioQueryDto = {},
@@ -81,33 +105,67 @@ export class UsuarioService {
   }
 
   async create(dto: CrearUsuarioDto) {
-    // ✅ Hashear contraseña
-    const hash = await bcrypt.hash(dto.contrasena, 10);
+    const claveTemporal = generarClaveTemporal();
+    const passwordHash = await bcrypt.hash(claveTemporal, 10);
 
-    // ✅ Convertir fecha (si viene). En Postman envíala "YYYY-MM-DD"
     const fechaNacimiento = dto.fecha_nacimiento
       ? new Date(dto.fecha_nacimiento)
       : null;
 
-    return this.prisma.usuario.create({
-      data: {
-        nombre: dto.nombre,
-        apellido: dto.apellido,
-        id_tipo_doc: dto.id_tipo_doc,
-        num_documento: dto.num_documento,
-        email: dto.email,
-        contrasena: hash,
-        id_rol: dto.id_rol,
-        estado: dto.estado ?? true,
+    const tokenPlano = generarTokenPlano();
+    const tokenHash = hashToken(tokenPlano);
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
 
-        // ✅ Campos nuevos (opcionales)
-        telefono: dto.telefono ?? null,
-        fecha_nacimiento: fechaNacimiento,
-        img_url: dto.img_url ?? null,
-        id_genero: dto.id_genero ?? null,
-      },
-      select: usuarioSelect,
+    const usuarioCreado = await this.prisma.$transaction(async (tx) => {
+      const usuario = await tx.usuario.create({
+        data: {
+          nombre: dto.nombre,
+          apellido: dto.apellido,
+          id_tipo_doc: dto.id_tipo_doc,
+          num_documento: dto.num_documento,
+          email: dto.email,
+          contrasena: passwordHash,
+          id_rol: dto.id_rol,
+          estado: dto.estado ?? true,
+          telefono: dto.telefono ?? null,
+          fecha_nacimiento: fechaNacimiento,
+          img_url: dto.img_url ?? null,
+          id_genero: dto.id_genero ?? null,
+        },
+        select: usuarioSelect,
+      });
+
+      await tx.password_setup_token.create({
+        data: {
+          id_usuario: usuario.id_usuario,
+          token_hash: tokenHash,
+          expires_at: expiresAt,
+        },
+      });
+
+      return usuario;
     });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const enlace = `${frontendUrl}/restablecer-contrasena?token=${tokenPlano}`;
+
+    setImmediate(async () => {
+      try {
+        await this.mailService.enviarCreacionContrasena({
+          to: dto.email,
+          nombre: dto.nombre,
+          enlace,
+        });
+      } catch (error) {
+        console.error('Error enviando correo de creación de contraseña:', error);
+      }
+    });
+
+    return {
+      message:
+        'Usuario creado correctamente. El correo para definir la contraseña se enviará en breve.',
+      usuario: usuarioCreado,
+    };
   }
 
   async update(id: number, dto: ActualizarUsuarioDto) {
@@ -118,15 +176,8 @@ export class UsuarioService {
 
     if (!exists) throw new NotFoundException('Usuario no encontrado');
 
-    // ✅ Tipado fuerte con Prisma
     const data: Prisma.usuarioUpdateInput = { ...dto };
 
-    // ✅ Si actualizan contraseña, hasheamos
-    if (dto.contrasena) {
-      data.contrasena = await bcrypt.hash(dto.contrasena, 10);
-    }
-
-    // ✅ Si actualizan fecha_nacimiento (string), convertir a Date
     if (dto.fecha_nacimiento) {
       data.fecha_nacimiento = new Date(dto.fecha_nacimiento);
     }
@@ -141,14 +192,38 @@ export class UsuarioService {
   async remove(id: number) {
     const exists = await this.prisma.usuario.findUnique({
       where: { id_usuario: id },
-      select: { id_usuario: true },
+      select: { id_usuario: true, nombre: true, apellido: true },
     });
 
-    if (!exists) throw new NotFoundException('Usuario no encontrado');
+    if (!exists) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
 
-    return this.prisma.usuario.delete({
-      where: { id_usuario: id },
-      select: usuarioSelect,
-    });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Relaciones "seguras" que sí podemos limpiar antes
+        await tx.bodegas_por_usuario.deleteMany({
+          where: { id_usuario: id },
+        });
+
+        await tx.password_setup_token.deleteMany({
+          where: { id_usuario: id },
+        });
+
+        // Intentar borrar usuario
+        return await tx.usuario.delete({
+          where: { id_usuario: id },
+          select: usuarioSelect,
+        });
+      });
+    } catch (e: unknown) {
+      if (isPrismaKnownError(e) && e.code === 'P2003') {
+        throw new BadRequestException(
+          'No se puede eliminar el usuario porque tiene registros relacionados. Inactívalo en su lugar.',
+        );
+      }
+
+      throw e;
+    }
   }
 }

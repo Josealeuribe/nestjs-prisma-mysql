@@ -1,8 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
+import { ActualizarMiPerfilDto } from '../dto/actualizar-mi-perfil.dto';
 
 type JwtPayload = {
   sub: number;
@@ -33,6 +38,8 @@ const usuarioLoginArgs = Prisma.validator<Prisma.usuarioDefaultArgs>()({
     bodegas_por_usuario: {
       include: { bodega: true },
     },
+    tipo_documento: true,
+    genero: true,
   },
 });
 
@@ -41,7 +48,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
-  ) { }
+  ) {}
 
   async login(email: string, plainPassword: string) {
     const user = await this.prisma.usuario.findUnique({
@@ -136,5 +143,86 @@ export class AuthService {
       bodegas,
       permisos,
     };
+  }
+
+  async actualizarMiPerfil(idUsuario: number, dto: ActualizarMiPerfilDto) {
+    const user = await this.prisma.usuario.findUnique({
+      where: { id_usuario: idUsuario },
+      select: { id_usuario: true, estado: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Usuario no encontrado');
+    }
+
+    if (!user.estado) {
+      throw new UnauthorizedException('Usuario inactivo');
+    }
+
+    if (dto.id_genero !== undefined) {
+      const genero = await this.prisma.genero.findUnique({
+        where: { id_genero: dto.id_genero },
+        select: { id_genero: true },
+      });
+
+      if (!genero) {
+        throw new BadRequestException('Género inválido');
+      }
+    }
+
+    const data: Prisma.usuarioUncheckedUpdateInput = {};
+
+    if (dto.nombre !== undefined) {
+      data.nombre = dto.nombre.trim();
+    }
+
+    if (dto.apellido !== undefined) {
+      data.apellido = dto.apellido.trim();
+    }
+
+    if (dto.telefono !== undefined) {
+      data.telefono = dto.telefono.trim() || null;
+    }
+
+    if (dto.fecha_nacimiento !== undefined) {
+      data.fecha_nacimiento = dto.fecha_nacimiento
+        ? new Date(dto.fecha_nacimiento)
+        : null;
+    }
+
+    if (dto.id_genero !== undefined) {
+      data.id_genero = dto.id_genero;
+    }
+
+    await this.prisma.usuario.update({
+      where: { id_usuario: idUsuario },
+      data,
+    });
+
+    return this.getMe(idUsuario);
+  }
+
+  async actualizarFotoPerfil(idUsuario: number, imageUrl: string) {
+    const user = await this.prisma.usuario.findUnique({
+      where: { id_usuario: idUsuario },
+      select: { id_usuario: true, estado: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Usuario no encontrado');
+    }
+
+    if (!user.estado) {
+      throw new UnauthorizedException('Usuario inactivo');
+    }
+
+    await this.prisma.usuario.update({
+      where: { id_usuario: idUsuario },
+      data: {
+        img_url: imageUrl,
+      },
+    });
+
+    return this.getMe(idUsuario);
   }
 }

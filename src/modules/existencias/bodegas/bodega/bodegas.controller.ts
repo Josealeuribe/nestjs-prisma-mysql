@@ -1,6 +1,6 @@
-import { Controller } from '@nestjs/common';
 import {
   Body,
+  Controller,
   Delete,
   Get,
   Param,
@@ -48,8 +48,7 @@ export class BodegaController {
     return this.service.update(id, dto);
   }
 
-  // Soft delete
-  @Delete(':id')
+  @Patch(':id/disable')
   disable(@Param('id', ParseIntPipe) id: number): Promise<BodegaPayload> {
     return this.service.disable(id);
   }
@@ -57,5 +56,10 @@ export class BodegaController {
   @Patch(':id/enable')
   enable(@Param('id', ParseIntPipe) id: number): Promise<BodegaPayload> {
     return this.service.enable(id);
+  }
+
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number): Promise<BodegaPayload> {
+    return this.service.remove(id);
   }
 }

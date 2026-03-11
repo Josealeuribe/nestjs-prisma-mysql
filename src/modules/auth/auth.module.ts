@@ -6,10 +6,15 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuthController } from './login/auth.controller';
 import { AuthService } from './login/auth.service';
 import { JwtStrategy } from './login/jwt/jwt.strategy';
+import { CrearContrasenaController } from './crear-contrasena.controller';
+import { CrearContrasenaService } from './crear-contrasena.service';
+import { RestablecerContrasenaService } from './restablecer-contrasena.service';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
     ConfigModule,
+    MailModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -19,8 +24,14 @@ import { JwtStrategy } from './login/jwt/jwt.strategy';
       }),
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, PrismaService, JwtStrategy],
+  controllers: [AuthController, CrearContrasenaController],
+  providers: [
+    AuthService,
+    PrismaService,
+    JwtStrategy,
+    CrearContrasenaService,
+    RestablecerContrasenaService,
+  ],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

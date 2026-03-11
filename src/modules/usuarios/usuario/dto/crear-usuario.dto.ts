@@ -9,7 +9,6 @@ import {
   Length,
   MaxLength,
   Min,
-  MinLength,
 } from 'class-validator';
 
 export class CrearUsuarioDto {
@@ -32,11 +31,6 @@ export class CrearUsuarioDto {
   @IsEmail()
   @Length(3, 100)
   email: string;
-
-  @IsString()
-  @MinLength(6)
-  @Length(6, 255)
-  contrasena: string;
 
   @IsInt()
   @Min(1)
