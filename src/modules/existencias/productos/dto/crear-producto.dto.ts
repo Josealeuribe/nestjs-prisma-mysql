@@ -9,11 +9,6 @@ import {
 } from 'class-validator';
 
 export class CreateProductoDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  codigo_producto?: string;
-
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
@@ -23,11 +18,6 @@ export class CreateProductoDto {
   @IsString()
   @MaxLength(255)
   descripcion?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  codigo_barras?: string;
 
   @IsInt()
   @Min(1)

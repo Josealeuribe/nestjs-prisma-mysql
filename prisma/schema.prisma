@@ -39,7 +39,6 @@ model bodegas_por_usuario {
 model categoria_producto {
   id_categoria_producto Int        @id @default(autoincrement()) @db.UnsignedInt
   nombre_categoria      String     @unique(map: "nombre_categoria") @db.VarChar(100)
-  estado                Boolean    @default(true)
   producto              producto[]
 }
 
@@ -283,6 +282,7 @@ model existencias {
   cantidad               Decimal                  @default(0.00) @db.Decimal(10, 2)
   fecha_vencimiento      DateTime?                @db.Date
   lote                   String                   @default("") @db.VarChar(50)
+  codigo_barras          String?                  @db.VarChar(100)
   detalle_remision_venta detalle_remision_venta[]
   detalle_traslado       detalle_traslado[]
   bodega                 bodega                   @relation(fields: [id_bodega], references: [id_bodega], map: "fk_existencias_bodega")
@@ -397,10 +397,8 @@ model permisos {
 
 model producto {
   id_producto             Int                       @id @default(autoincrement()) @db.UnsignedInt
-  codigo_producto         String?                   @unique(map: "codigo_producto") @db.VarChar(20)
   nombre_producto         String                    @db.VarChar(150)
   descripcion             String?                   @db.VarChar(255)
-  codigo_barras           String?                   @unique(map: "uq_producto_codigo_barras") @db.VarChar(100)
   id_categoria_producto   Int                       @db.UnsignedInt
   id_iva                  Int                       @db.UnsignedInt
   estado                  Boolean                   @default(true)

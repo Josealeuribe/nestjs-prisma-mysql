@@ -15,22 +15,33 @@ export type BodegaPayload = Prisma.bodegaGetPayload<{
 }>;
 
 export type BodegaWithMunicipio = Prisma.bodegaGetPayload<{
-  include: { municipios: true };
+  include: {
+    municipios: {
+      include: {
+        departamentos: true;
+      };
+    };
+    _count: {
+      select: {
+        bodegas_por_usuario: true;
+      };
+    };
+  };
 }>;
 
 export type BodegasFindAllResponse =
   | BodegaPayload[]
   | {
-      page: number;
-      limit: number;
-      total: number;
-      pages: number;
-      data: (BodegaPayload | BodegaWithMunicipio)[];
-    };
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+    data: (BodegaPayload | BodegaWithMunicipio)[];
+  };
 
 @Injectable()
 export class BodegaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   private async assertMunicipioExists(id_municipio: number) {
     const exists = await this.prisma.municipios.findUnique({
@@ -51,6 +62,18 @@ export class BodegaService {
 
     if (!exists) {
       throw new NotFoundException('Bodega no encontrada');
+    }
+  }
+
+  private async assertCanDisable(id: number) {
+    const usuariosAsignados = await this.prisma.bodegas_por_usuario.count({
+      where: { id_bodega: id },
+    });
+
+    if (usuariosAsignados > 0) {
+      throw new BadRequestException(
+        'No se puede inactivar la bodega porque está asignada a uno o más usuarios.',
+      );
     }
   }
 
@@ -151,7 +174,18 @@ export class BodegaService {
         return this.prisma.bodega.findMany({
           where,
           orderBy: { id_bodega: 'desc' },
-          include: { municipios: true },
+          include: {
+            municipios: {
+              include: {
+                departamentos: true,
+              },
+            },
+            _count: {
+              select: {
+                bodegas_por_usuario: true,
+              },
+            },
+          },
         });
       }
 
@@ -174,11 +208,28 @@ export class BodegaService {
           skip,
           take: limit,
           orderBy: { id_bodega: 'desc' },
-          include: { municipios: true },
+          include: {
+            municipios: {
+              include: {
+                departamentos: true,
+              },
+            },
+            _count: {
+              select: {
+                bodegas_por_usuario: true,
+              },
+            },
+          },
         }),
       ]);
 
-      return { page, limit, total, pages: Math.ceil(total / limit), data };
+      return {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        data,
+      };
     }
 
     const [total, data] = await this.prisma.$transaction([
@@ -192,14 +243,31 @@ export class BodegaService {
       }),
     ]);
 
-    return { page, limit, total, pages: Math.ceil(total / limit), data };
+    return {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit),
+      data,
+    };
   }
 
   async findOne(id: number, includeMunicipio = true) {
     if (includeMunicipio) {
       const bodega = await this.prisma.bodega.findUnique({
         where: { id_bodega: id },
-        include: { municipios: true },
+        include: {
+          municipios: {
+            include: {
+              departamentos: true,
+            },
+          },
+          _count: {
+            select: {
+              bodegas_por_usuario: true,
+            },
+          },
+        },
       });
 
       if (!bodega) {
@@ -242,6 +310,7 @@ export class BodegaService {
 
   async disable(id: number): Promise<BodegaPayload> {
     await this.assertBodegaExists(id);
+    await this.assertCanDisable(id);
 
     return this.prisma.bodega.update({
       where: { id_bodega: id },

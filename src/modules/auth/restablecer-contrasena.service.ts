@@ -33,7 +33,7 @@ export class RestablecerContrasenaService {
 
     const tokenPlano = generarTokenPlano();
     const tokenHash = hashToken(tokenPlano);
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 horas
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.password_setup_token.deleteMany({
@@ -52,15 +52,21 @@ export class RestablecerContrasenaService {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const enlace = `${frontendUrl}/restablecer-contrasena?token=${tokenPlano}`;
 
-    await this.mailService.enviarRestablecimientoContrasena({
-      to: usuario.email,
-      nombre: usuario.nombre,
-      enlace,
+    setImmediate(async () => {
+      try {
+        await this.mailService.enviarRestablecimientoContrasena({
+          to: usuario.email,
+          nombre: usuario.nombre,
+          enlace,
+        });
+      } catch (error) {
+        console.error('Error enviando correo de restablecimiento:', error);
+      }
     });
 
     return {
       message:
-        'Si el correo existe en el sistema, se enviará un enlace para restablecer la contraseña.',
+        'Si el correo existe en el sistema, el enlace para restablecer la contraseña se enviará en breve.',
     };
   }
 }

@@ -9,11 +9,14 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ClientesService } from './clientes.service';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
+import { JwtAuthGuard } from 'src/modules/auth/login/jwt/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('clientes')
 export class ClientesController {
   constructor(private readonly service: ClientesService) {}
@@ -26,10 +29,16 @@ export class ClientesController {
   // /clientes?incluirInactivos=true&q=juan
   @Get()
   findAll(
-    @Query('incluirInactivos', new ParseBoolPipe({ optional: true })) incluirInactivos?: boolean,
+    @Query('incluirInactivos', new ParseBoolPipe({ optional: true }))
+    incluirInactivos?: boolean,
     @Query('q') q?: string,
   ) {
     return this.service.findAll({ incluirInactivos, q });
+  }
+
+  @Get('meta')
+  getMeta() {
+    return this.service.getMeta();
   }
 
   @Get(':id')

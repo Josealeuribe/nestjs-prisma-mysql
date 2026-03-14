@@ -8,7 +8,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateProductoDto } from './dto/crear-producto.dto';
 import { UpdateProductoDto } from './dto/update-producto.dto';
 import { ListProductoQueryDto } from './dto/list-producto.query.dto';
-import { productoSelect } from './selects/producto.select';
+import { productoSelect } from './iva/selects/producto.select';
 
 export type ProductoPayload = Prisma.productoGetPayload<{
   select: typeof productoSelect;
@@ -21,24 +21,26 @@ export type ProductoWithRefs = Prisma.productoGetPayload<{
 export type ProductosFindAllResponse =
   | ProductoPayload[]
   | {
-      page: number;
-      limit: number;
-      total: number;
-      pages: number;
-      data: (ProductoPayload | ProductoWithRefs)[];
-    };
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+    data: (ProductoPayload | ProductoWithRefs)[];
+  };
 
 @Injectable()
 export class ProductosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   private async assertCategoriaExists(id_categoria_producto: number) {
     const exists = await this.prisma.categoria_producto.findUnique({
       where: { id_categoria_producto },
       select: { id_categoria_producto: true },
     });
-    if (!exists)
+
+    if (!exists) {
       throw new BadRequestException('id_categoria_producto no existe');
+    }
   }
 
   private async assertIvaExists(id_iva: number) {
@@ -46,23 +48,20 @@ export class ProductosService {
       where: { id_iva },
       select: { id_iva: true },
     });
-    if (!exists) throw new BadRequestException('id_iva no existe');
+
+    if (!exists) {
+      throw new BadRequestException('id_iva no existe');
+    }
   }
 
   async create(dto: CreateProductoDto): Promise<ProductoPayload> {
     await this.assertCategoriaExists(dto.id_categoria_producto);
     await this.assertIvaExists(dto.id_iva);
 
-    // Normalización simple (opcional)
-    const codigo_barras = dto.codigo_barras?.trim() || null;
-    const codigo_producto = dto.codigo_producto?.trim() || null;
-
     return this.prisma.producto.create({
       data: {
-        codigo_producto,
         nombre_producto: dto.nombre_producto.trim(),
         descripcion: dto.descripcion?.trim() || null,
-        codigo_barras,
         id_categoria_producto: dto.id_categoria_producto,
         id_iva: dto.id_iva,
         estado: dto.estado ?? true,
@@ -77,26 +76,24 @@ export class ProductosService {
     const where: Prisma.productoWhereInput = {};
 
     if (query.estado !== undefined) where.estado = query.estado === 'true';
-    if (query.id_categoria_producto !== undefined)
+    if (query.id_categoria_producto !== undefined) {
       where.id_categoria_producto = query.id_categoria_producto;
-    if (query.id_iva !== undefined) where.id_iva = query.id_iva;
-    if (query.codigo_barras && query.codigo_barras.trim())
-      where.codigo_barras = query.codigo_barras.trim();
+    }
+    if (query.id_iva !== undefined) {
+      where.id_iva = query.id_iva;
+    }
 
     if (query.q && query.q.trim()) {
       const q = query.q.trim();
       where.OR = [
         { nombre_producto: { contains: q } },
         { descripcion: { contains: q } },
-        { codigo_producto: { contains: q } },
-        { codigo_barras: { contains: q } },
       ];
     }
 
     const includeRefs = query.includeRefs === 'true';
     const hasPagination = query.page !== undefined || query.limit !== undefined;
 
-    // LEGACY: array
     if (!hasPagination) {
       if (includeRefs) {
         return this.prisma.producto.findMany({
@@ -113,7 +110,6 @@ export class ProductosService {
       });
     }
 
-    // PAGINADO
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
     const skip = (page - 1) * limit;
@@ -130,7 +126,13 @@ export class ProductosService {
         }),
       ]);
 
-      return { page, limit, total, pages: Math.ceil(total / limit), data };
+      return {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        data,
+      };
     }
 
     const [total, data] = await this.prisma.$transaction([
@@ -144,7 +146,13 @@ export class ProductosService {
       }),
     ]);
 
-    return { page, limit, total, pages: Math.ceil(total / limit), data };
+    return {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit),
+      data,
+    };
   }
 
   async findOne(id: number, includeRefs = true) {
@@ -153,7 +161,11 @@ export class ProductosService {
         where: { id_producto: id },
         include: { categoria_producto: true, iva: true },
       });
-      if (!prod) throw new NotFoundException('Producto no encontrado');
+
+      if (!prod) {
+        throw new NotFoundException('Producto no encontrado');
+      }
+
       return prod;
     }
 
@@ -161,7 +173,11 @@ export class ProductosService {
       where: { id_producto: id },
       select: productoSelect,
     });
-    if (!prod) throw new NotFoundException('Producto no encontrado');
+
+    if (!prod) {
+      throw new NotFoundException('Producto no encontrado');
+    }
+
     return prod;
   }
 
@@ -170,19 +186,24 @@ export class ProductosService {
       where: { id_producto: id },
       select: { id_producto: true },
     });
-    if (!exists) throw new NotFoundException('Producto no encontrado');
 
-    if (dto.id_categoria_producto !== undefined)
+    if (!exists) {
+      throw new NotFoundException('Producto no encontrado');
+    }
+
+    if (dto.id_categoria_producto !== undefined) {
       await this.assertCategoriaExists(dto.id_categoria_producto);
-    if (dto.id_iva !== undefined) await this.assertIvaExists(dto.id_iva);
+    }
+
+    if (dto.id_iva !== undefined) {
+      await this.assertIvaExists(dto.id_iva);
+    }
 
     return this.prisma.producto.update({
       where: { id_producto: id },
       data: {
-        codigo_producto: dto.codigo_producto?.trim() ?? undefined,
         nombre_producto: dto.nombre_producto?.trim() ?? undefined,
         descripcion: dto.descripcion?.trim() ?? undefined,
-        codigo_barras: dto.codigo_barras?.trim() ?? undefined,
         id_categoria_producto: dto.id_categoria_producto,
         id_iva: dto.id_iva,
         estado: dto.estado,

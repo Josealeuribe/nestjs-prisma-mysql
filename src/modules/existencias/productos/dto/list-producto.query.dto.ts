@@ -30,10 +30,6 @@ export class ListProductoQueryDto {
   id_iva?: number;
 
   @IsOptional()
-  @IsString()
-  codigo_barras?: string;
-
-  @IsOptional()
   @Transform(({ value }) => Number(value))
   @IsInt()
   @Min(1)

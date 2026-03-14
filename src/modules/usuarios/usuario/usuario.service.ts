@@ -176,10 +176,52 @@ export class UsuarioService {
 
     if (!exists) throw new NotFoundException('Usuario no encontrado');
 
-    const data: Prisma.usuarioUpdateInput = { ...dto };
+    const data: Prisma.usuarioUncheckedUpdateInput = {};
 
-    if (dto.fecha_nacimiento) {
-      data.fecha_nacimiento = new Date(dto.fecha_nacimiento);
+    if (dto.nombre !== undefined) {
+      data.nombre = dto.nombre.trim();
+    }
+
+    if (dto.apellido !== undefined) {
+      data.apellido = dto.apellido.trim();
+    }
+
+    if (dto.id_tipo_doc !== undefined) {
+      data.id_tipo_doc = dto.id_tipo_doc;
+    }
+
+    if (dto.num_documento !== undefined) {
+      data.num_documento = dto.num_documento.trim();
+    }
+
+    if (dto.email !== undefined) {
+      data.email = dto.email.trim().toLowerCase();
+    }
+
+    if (dto.id_rol !== undefined) {
+      data.id_rol = dto.id_rol;
+    }
+
+    if (dto.estado !== undefined) {
+      data.estado = dto.estado;
+    }
+
+    if (dto.telefono !== undefined) {
+      data.telefono = dto.telefono?.trim() || null;
+    }
+
+    if (dto.img_url !== undefined) {
+      data.img_url = dto.img_url?.trim() || null;
+    }
+
+    if (dto.id_genero !== undefined) {
+      data.id_genero = dto.id_genero ?? null;
+    }
+
+    if (dto.fecha_nacimiento !== undefined) {
+      data.fecha_nacimiento = dto.fecha_nacimiento
+        ? new Date(dto.fecha_nacimiento)
+        : null;
     }
 
     return this.prisma.usuario.update({

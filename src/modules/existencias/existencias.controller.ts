@@ -6,6 +6,7 @@ import {
   Param,
   ParseIntPipe,
   Patch,
+  Query,
   Post,
   Req,
   UseGuards,
@@ -36,6 +37,20 @@ export class ExistenciasController {
     return this.existenciasService.create(dto, {
       idBodegaActiva: id_bodega_activa,
       bodegasPermitidas,
+    });
+  }
+
+  @Get('productos-vista')
+  findProductosVista(
+    @Req() req: RequestWithUser,
+    @Query('scope') scope?: 'active' | 'all',
+  ) {
+    const { id_bodega_activa, bodegasPermitidas } = req.user;
+
+    return this.existenciasService.findProductosVista({
+      idBodegaActiva: id_bodega_activa,
+      bodegasPermitidas,
+      scope: scope === 'all' ? 'all' : 'active',
     });
   }
 

@@ -1,3 +1,4 @@
+
 import {
   BadRequestException,
   Injectable,
@@ -240,6 +241,29 @@ export class ClientesService {
       }
       throw e;
     }
+  }
+
+  async getMeta() {
+    const [tiposDocumento, tiposCliente, municipios] = await Promise.all([
+      this.prisma.tipo_documento.findMany({
+        orderBy: { id_tipo_doc: 'asc' },
+      }),
+      this.prisma.tipo_cliente.findMany({
+        orderBy: { id_tipo_cliente: 'asc' },
+      }),
+      this.prisma.municipios.findMany({
+        include: {
+          departamentos: true, // ajusta el nombre si tu relación no se llama así
+        },
+        orderBy: { id_municipio: 'asc' },
+      }),
+    ]);
+
+    return {
+      tiposDocumento,
+      tiposCliente,
+      municipios,
+    };
   }
 
   // ✅ SOFT DELETE

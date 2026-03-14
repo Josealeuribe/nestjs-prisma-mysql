@@ -12,10 +12,8 @@ export const existenciaListSelect =
     producto: {
       select: {
         id_producto: true,
-        codigo_producto: true,
         nombre_producto: true,
         descripcion: true,
-        codigo_barras: true,
         estado: true,
         iva: {
           select: {
