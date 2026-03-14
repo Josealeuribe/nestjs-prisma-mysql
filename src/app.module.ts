@@ -16,6 +16,7 @@ import { CatalogosModule } from './modules/catalogos/catalogos.module';
 import { TipoDocumentoModule } from './modules/tipo-documento/tipo-documento.module';
 import { TipoProveedorModule } from './modules/tipo-proveedor/tipo-proveedor.module';
 import { MunicipioModule } from './modules/municipios/municipio.module';
+import { TerminoPagoModule } from './modules/termino-pago/termino-pago.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { MunicipioModule } from './modules/municipios/municipio.module';
     TipoDocumentoModule,
     TipoProveedorModule,
     MunicipioModule,
+    TerminoPagoModule,
   ],
   controllers: [AppController],
   providers: [AppService],
