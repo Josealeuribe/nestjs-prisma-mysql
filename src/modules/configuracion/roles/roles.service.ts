@@ -21,14 +21,11 @@ function isPrismaKnownError(e: unknown): e is PrismaKnownError {
 
 function getMetaTarget(meta: unknown): string[] | string | undefined {
   if (!isObject(meta)) return undefined;
-
   const target = meta['target'];
   if (typeof target === 'string') return target;
-
   if (Array.isArray(target) && target.every((x) => typeof x === 'string')) {
     return target;
   }
-
   return undefined;
 }
 
@@ -46,7 +43,11 @@ function isUniqueConstraintError(e: unknown, field?: string): boolean {
     : target.includes(field);
 }
 
+<<<<<<< HEAD
 const rolDetailSelect = Prisma.validator<Prisma.rolesSelect>()({
+=======
+const rolSelect = {
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
   id_rol: true,
   nombre_rol: true,
   descripcion: true,
@@ -58,7 +59,10 @@ const rolDetailSelect = Prisma.validator<Prisma.rolesSelect>()({
   },
   roles_permisos: {
     select: {
+<<<<<<< HEAD
       id_permiso: true,
+=======
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
       permisos: {
         select: {
           id_permiso: true,
@@ -66,6 +70,7 @@ const rolDetailSelect = Prisma.validator<Prisma.rolesSelect>()({
         },
       },
     },
+<<<<<<< HEAD
     orderBy: {
       id_permiso: 'asc',
     },
@@ -75,11 +80,40 @@ const rolDetailSelect = Prisma.validator<Prisma.rolesSelect>()({
 type RolDetail = Prisma.rolesGetPayload<{
   select: typeof rolDetailSelect;
 }>;
+=======
+  },
+} satisfies Prisma.rolesSelect;
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
 
 @Injectable()
 export class RolesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
+  private async validarPermisos(idsPermisos: number[]) {
+    if (!idsPermisos?.length) return;
+
+    const idsUnicos = [...new Set(idsPermisos)];
+    const permisos = await this.prisma.permisos.findMany({
+      where: { id_permiso: { in: idsUnicos } },
+      select: { id_permiso: true },
+    });
+
+    const encontrados = new Set(permisos.map((p) => p.id_permiso));
+    const faltantes = idsUnicos.filter((id) => !encontrados.has(id));
+
+    if (faltantes.length) {
+      throw new BadRequestException(
+        `Permiso(s) inválido(s): ${faltantes.join(', ')}`,
+      );
+    }
+  }
+
+  async create(dto: CreateRolDto) {
+    const idsPermisos = dto.ids_permisos ? [...new Set(dto.ids_permisos)] : [];
+
+    await this.validarPermisos(idsPermisos);
+
+<<<<<<< HEAD
   async create(dto: CreateRolDto): Promise<RolDetail> {
     const idsPermisos = this.normalizeIds(dto.ids_permisos);
 
@@ -87,11 +121,16 @@ export class RolesService {
 
     try {
       const nuevoRol = await this.prisma.$transaction(async (tx) => {
+=======
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
         const rol = await tx.roles.create({
           data: {
             nombre_rol: dto.nombre_rol.trim(),
             descripcion: dto.descripcion.trim(),
             estado: dto.estado ?? true,
+<<<<<<< HEAD
           },
         });
 
@@ -105,6 +144,21 @@ export class RolesService {
           });
         }
 
+=======
+            ...(idsPermisos.length
+              ? {
+                roles_permisos: {
+                  create: idsPermisos.map((id_permiso) => ({
+                    id_permiso,
+                  })),
+                },
+              }
+              : {}),
+          },
+          select: rolSelect,
+        });
+
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
         return rol;
       });
 
@@ -117,12 +171,17 @@ export class RolesService {
     }
   }
 
+<<<<<<< HEAD
   async findAll(params?: { incluirInactivos?: boolean }): Promise<RolDetail[]> {
+=======
+  async findAll(params?: { incluirInactivos?: boolean }) {
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
     const incluirInactivos = params?.incluirInactivos ?? false;
 
     return this.prisma.roles.findMany({
       where: incluirInactivos ? {} : { estado: true },
       orderBy: { id_rol: 'asc' },
+<<<<<<< HEAD
       select: rolDetailSelect,
     });
   }
@@ -131,6 +190,16 @@ export class RolesService {
     const rol = await this.prisma.roles.findUnique({
       where: { id_rol },
       select: rolDetailSelect,
+=======
+      select: rolSelect,
+    });
+  }
+
+  async findOne(id_rol: number) {
+    const rol = await this.prisma.roles.findUnique({
+      where: { id_rol },
+      select: rolSelect,
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
     });
 
     if (!rol) {
@@ -140,6 +209,7 @@ export class RolesService {
     return rol;
   }
 
+<<<<<<< HEAD
   async update(id_rol: number, dto: UpdateRolDto): Promise<RolDetail> {
     await this.ensureExists(id_rol);
 
@@ -154,6 +224,59 @@ export class RolesService {
 
     if (idsPermisos !== undefined) {
       await this.ensurePermisosExist(idsPermisos);
+    }
+=======
+  async asignarPermisos(id_rol: number, idsPermisos: number[]) {
+    await this.findOne(id_rol);
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
+
+    const idsUnicos = [...new Set(idsPermisos)];
+    await this.validarPermisos(idsUnicos);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.roles_permisos.deleteMany({
+        where: { id_rol },
+      });
+
+      if (idsUnicos.length) {
+        await tx.roles_permisos.createMany({
+          data: idsUnicos.map((id_permiso) => ({
+            id_rol,
+            id_permiso,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return tx.roles.findUnique({
+        where: { id_rol },
+        select: rolSelect,
+      });
+    });
+  }
+
+  async update(id_rol: number, dto: UpdateRolDto) {
+    await this.findOne(id_rol);
+
+    const idsPermisos = dto.ids_permisos
+      ? [...new Set(dto.ids_permisos)]
+      : undefined;
+
+    if (idsPermisos) {
+      await this.validarPermisos(idsPermisos);
+    }
+
+    // No permitir desactivar roles con usuarios asignados
+    if (dto.estado === false) {
+      const totalUsuarios = await this.prisma.usuario.count({
+        where: { id_rol },
+      });
+
+      if (totalUsuarios > 0) {
+        throw new BadRequestException(
+          'No se puede desactivar el rol porque tiene usuarios asignados',
+        );
+      }
     }
 
     const data: Prisma.rolesUpdateInput = {};
@@ -171,18 +294,26 @@ export class RolesService {
     }
 
     try {
+<<<<<<< HEAD
       await this.prisma.$transaction(async (tx) => {
         await tx.roles.update({
           where: { id_rol },
           data,
         });
 
+=======
+      return await this.prisma.$transaction(async (tx) => {
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
         if (idsPermisos !== undefined) {
           await tx.roles_permisos.deleteMany({
             where: { id_rol },
           });
 
+<<<<<<< HEAD
           if (idsPermisos.length > 0) {
+=======
+          if (idsPermisos.length) {
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
             await tx.roles_permisos.createMany({
               data: idsPermisos.map((id_permiso) => ({
                 id_rol,
@@ -192,6 +323,15 @@ export class RolesService {
             });
           }
         }
+<<<<<<< HEAD
+=======
+
+        return tx.roles.update({
+          where: { id_rol },
+          data,
+          select: rolSelect,
+        });
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
       });
 
       return this.findOne(id_rol);
@@ -203,6 +343,7 @@ export class RolesService {
     }
   }
 
+<<<<<<< HEAD
   async asignarPermisos(
     id_rol: number,
     dto: AsignarPermisosRolDto,
@@ -237,8 +378,23 @@ export class RolesService {
     await this.ensureNoUsersAssigned(id_rol);
 
     await this.prisma.roles.update({
+=======
+  async remove(id_rol: number): Promise<roles> {
+    await this.findOne(id_rol);
+
+    const totalUsuarios = await this.prisma.usuario.count({
       where: { id_rol },
-      data: { estado: false },
+    });
+
+    if (totalUsuarios > 0) {
+      throw new BadRequestException(
+        'No se puede eliminar el rol porque tiene usuarios asignados',
+      );
+    }
+
+    return this.prisma.roles.delete({
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
+      where: { id_rol },
     });
 
     return this.findOne(id_rol);

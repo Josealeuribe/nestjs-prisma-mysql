@@ -9,7 +9,11 @@ import {
 
 export class CreateProductoDto {
   @IsString()
+<<<<<<< HEAD
   @MinLength(3)
+=======
+  @IsNotEmpty()
+>>>>>>> 1d97f8d42da8fa688f1e06bedcb6a1393c7aff1a
   @MaxLength(150)
   nombre_producto: string;
 
@@ -17,11 +21,6 @@ export class CreateProductoDto {
   @IsString()
   @MaxLength(255)
   descripcion?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  codigo_barras?: string;
 
   @IsInt()
   id_categoria_producto: number;

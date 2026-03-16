@@ -1,10 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import * as express from 'express';
+import { join } from 'path';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AllExceptionsFilter } from './common/filters/all-exceptions-filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
   const logger = new Logger('Bootstrap');
 
   // 1. Prefijo y Filtros (Seguridad y Orden)

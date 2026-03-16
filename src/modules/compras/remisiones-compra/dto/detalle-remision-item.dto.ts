@@ -35,7 +35,7 @@ export class CreateDetalleRemisionCompraDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)
-  cod_barras?: string;
+  codigo_barras?: string;
 
   @IsOptional()
   @IsString()

@@ -6,4 +6,9 @@ export const bodegaSelect = {
   direccion: true,
   id_municipio: true,
   estado: true,
-} satisfies Prisma.bodegaSelect;
+  _count: {
+    select: {
+      bodegas_por_usuario: true,
+    },
+  },
+} as const;
