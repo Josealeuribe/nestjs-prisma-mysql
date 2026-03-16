@@ -280,6 +280,7 @@ model existencias {
   id_bodega              Int                      @db.UnsignedInt
   nota                   String?                  @db.VarChar(255)
   cantidad               Decimal                  @default(0.00) @db.Decimal(10, 2)
+  cantidad_reservada     Decimal                  @default(0) @db.Decimal(10, 2)
   fecha_vencimiento      DateTime?                @db.Date
   lote                   String                   @default("") @db.VarChar(50)
   codigo_barras          String?                  @db.VarChar(100)

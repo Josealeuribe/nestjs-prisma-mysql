@@ -16,8 +16,6 @@ import { CreateExistenciaDto } from './dto/create-existencia.dto';
 import { UpdateExistenciaDto } from './dto/update-existencia.dto';
 import { ExistenciasService } from './existencias.service';
 
-// 1. Definimos la interfaz aquí mismo
-// English: Defining the interface locally to replace 'any'
 interface RequestWithUser extends Request {
   user: {
     id_bodega_activa: number;
@@ -28,14 +26,19 @@ interface RequestWithUser extends Request {
 @UseGuards(AuthGuard('jwt'))
 @Controller('existencias')
 export class ExistenciasController {
-  constructor(private readonly existenciasService: ExistenciasService) {}
+  constructor(private readonly existenciasService: ExistenciasService) { }
 
   @Post()
-  create(@Req() req: RequestWithUser, @Body() dto: CreateExistenciaDto) {
+  create(
+    @Req() req: RequestWithUser,
+    @Body() dto: CreateExistenciaDto,
+    @Query('id_bodega') idBodegaRaw?: string,
+  ) {
     const { id_bodega_activa, bodegasPermitidas } = req.user;
+    const idBodegaActiva = idBodegaRaw ? Number(idBodegaRaw) : id_bodega_activa;
 
     return this.existenciasService.create(dto, {
-      idBodegaActiva: id_bodega_activa,
+      idBodegaActiva,
       bodegasPermitidas,
     });
   }
@@ -44,22 +47,28 @@ export class ExistenciasController {
   findProductosVista(
     @Req() req: RequestWithUser,
     @Query('scope') scope?: 'active' | 'all',
+    @Query('id_bodega') idBodegaRaw?: string,
   ) {
     const { id_bodega_activa, bodegasPermitidas } = req.user;
+    const idBodegaActiva = idBodegaRaw ? Number(idBodegaRaw) : id_bodega_activa;
 
     return this.existenciasService.findProductosVista({
-      idBodegaActiva: id_bodega_activa,
+      idBodegaActiva,
       bodegasPermitidas,
       scope: scope === 'all' ? 'all' : 'active',
     });
   }
 
   @Get()
-  findAll(@Req() req: RequestWithUser) {
+  findAll(
+    @Req() req: RequestWithUser,
+    @Query('id_bodega') idBodegaRaw?: string,
+  ) {
     const { id_bodega_activa, bodegasPermitidas } = req.user;
+    const idBodegaActiva = idBodegaRaw ? Number(idBodegaRaw) : id_bodega_activa;
 
     return this.existenciasService.findAll({
-      idBodegaActiva: id_bodega_activa,
+      idBodegaActiva,
       bodegasPermitidas,
     });
   }
@@ -67,7 +76,6 @@ export class ExistenciasController {
   @Get(':id')
   findOne(@Req() req: RequestWithUser, @Param('id', ParseIntPipe) id: number) {
     const { bodegasPermitidas } = req.user;
-
     return this.existenciasService.findOne(id, { bodegasPermitidas });
   }
 
@@ -76,11 +84,13 @@ export class ExistenciasController {
     @Req() req: RequestWithUser,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateExistenciaDto,
+    @Query('id_bodega') idBodegaRaw?: string,
   ) {
     const { id_bodega_activa, bodegasPermitidas } = req.user;
+    const idBodegaActiva = idBodegaRaw ? Number(idBodegaRaw) : id_bodega_activa;
 
     return this.existenciasService.update(id, dto, {
-      idBodegaActiva: id_bodega_activa,
+      idBodegaActiva,
       bodegasPermitidas,
     });
   }
@@ -88,7 +98,6 @@ export class ExistenciasController {
   @Delete(':id')
   remove(@Req() req: RequestWithUser, @Param('id', ParseIntPipe) id: number) {
     const { bodegasPermitidas } = req.user;
-
     return this.existenciasService.remove(id, { bodegasPermitidas });
   }
 }

@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -14,12 +15,9 @@ import { CreateTrasladoDto } from './dto/create-traslado.dto';
 import { UpdateTrasladoDto } from './dto/update-traslado.dto';
 import { TrasladosService } from './traslados.service';
 
-// 1. Definimos la interfaz aquí mismo para evitar el "any"
-// English: We define the interface here to avoid the "any" type.
 interface RequestWithUser extends Request {
   user: {
     id_usuario: number;
-    id_bodega_activa: number;
     bodegasPermitidas?: number[];
   };
 }
@@ -31,31 +29,32 @@ export class TrasladosController {
 
   @Post()
   create(@Req() req: RequestWithUser, @Body() dto: CreateTrasladoDto) {
-    // Usamos desestructuración para limpiar el código
-    const { id_usuario, id_bodega_activa, bodegasPermitidas } = req.user;
+    const { id_usuario, bodegasPermitidas } = req.user;
 
     return this.trasladosService.create(dto, {
       idUsuario: id_usuario,
-      idBodegaActiva: id_bodega_activa,
       bodegasPermitidas,
     });
   }
 
   @Get()
-  findAll(@Req() req: RequestWithUser) {
-    const { id_bodega_activa, bodegasPermitidas } = req.user;
+  findAll(
+    @Req() req: RequestWithUser,
+    @Query('id_bodega') idBodegaRaw?: string,
+  ) {
+    const idBodega = idBodegaRaw ? Number(idBodegaRaw) : undefined;
 
     return this.trasladosService.findAll({
-      idBodegaActiva: id_bodega_activa,
-      bodegasPermitidas,
+      idBodega,
+      bodegasPermitidas: req.user?.bodegasPermitidas,
     });
   }
 
   @Get(':id')
   findOne(@Req() req: RequestWithUser, @Param('id', ParseIntPipe) id: number) {
-    const { bodegasPermitidas } = req.user;
-
-    return this.trasladosService.findOne(id, { bodegasPermitidas });
+    return this.trasladosService.findOne(id, {
+      bodegasPermitidas: req.user?.bodegasPermitidas,
+    });
   }
 
   @Patch(':id')

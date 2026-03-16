@@ -7,6 +7,7 @@ export const existenciaListSelect =
     id_bodega: true,
     nota: true,
     cantidad: true,
+    cantidad_reservada: true,
     fecha_vencimiento: true,
     lote: true,
     producto: {
