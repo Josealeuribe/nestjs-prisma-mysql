@@ -4,19 +4,29 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-
-import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateBodegaDto } from './dto/create-bodega.dto';
 import { UpdateBodegaDto } from './dto/update-bodega.dto';
 import { ListBodegaQueryDto } from './dto/list-bodega.query.dto';
 import { bodegaSelect } from './selects/bodega.select';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 export type BodegaPayload = Prisma.bodegaGetPayload<{
   select: typeof bodegaSelect;
 }>;
 
 export type BodegaWithMunicipio = Prisma.bodegaGetPayload<{
-  include: { municipios: true };
+  include: {
+    municipios: {
+      include: {
+        departamentos: true;
+      };
+    };
+    _count: {
+      select: {
+        bodegas_por_usuario: true;
+      };
+    };
+  };
 }>;
 
 export type BodegasFindAllResponse =
@@ -33,7 +43,7 @@ export type BodegasFindAllResponse =
 export class BodegaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async assertMunicipioExists(id_municipio: number): Promise<void> {
+  private async assertMunicipioExists(id_municipio: number) {
     const exists = await this.prisma.municipios.findUnique({
       where: { id_municipio },
       select: { id_municipio: true },
@@ -44,7 +54,7 @@ export class BodegaService {
     }
   }
 
-  private async ensureBodegaExists(id: number): Promise<void> {
+  private async assertBodegaExists(id: number) {
     const exists = await this.prisma.bodega.findUnique({
       where: { id_bodega: id },
       select: { id_bodega: true },
@@ -55,45 +65,80 @@ export class BodegaService {
     }
   }
 
-  private async resolveMunicipioId(dto: {
-    id_municipio?: number;
-    municipio?: string;
-  }): Promise<number> {
-    if (dto.id_municipio !== undefined) {
-      await this.assertMunicipioExists(dto.id_municipio);
-      return dto.id_municipio;
+  private async assertCanDisable(id: number) {
+    const usuariosAsignados = await this.prisma.bodegas_por_usuario.count({
+      where: { id_bodega: id },
+    });
+
+    if (usuariosAsignados > 0) {
+      throw new BadRequestException(
+        'No se puede inactivar la bodega porque está asignada a uno o más usuarios.',
+      );
     }
+  }
 
-    if (dto.municipio?.trim()) {
-      const municipioBuscado = dto.municipio.trim();
+  private async assertCanDelete(id: number) {
+    const [
+      usuarios,
+      compras,
+      cotizaciones,
+      existencias,
+      ordenesVenta,
+      remisionesCompra,
+      trasladosOrigen,
+      trasladosDestino,
+    ] = await this.prisma.$transaction([
+      this.prisma.bodegas_por_usuario.count({
+        where: { id_bodega: id },
+      }),
+      this.prisma.compras.count({
+        where: { id_bodega: id },
+      }),
+      this.prisma.cotizacion.count({
+        where: { id_bodega: id },
+      }),
+      this.prisma.existencias.count({
+        where: { id_bodega: id },
+      }),
+      this.prisma.orden_venta.count({
+        where: { id_bodega: id },
+      }),
+      this.prisma.remision_compra.count({
+        where: { id_bodega: id },
+      }),
+      this.prisma.traslado.count({
+        where: { id_bodega_origen: id },
+      }),
+      this.prisma.traslado.count({
+        where: { id_bodega_destino: id },
+      }),
+    ]);
 
-      const municipio = await this.prisma.municipios.findFirst({
-        where: {
-          nombre_municipio: municipioBuscado,
-        },
-        select: { id_municipio: true },
-      });
+    const totalRelaciones =
+      usuarios +
+      compras +
+      cotizaciones +
+      existencias +
+      ordenesVenta +
+      remisionesCompra +
+      trasladosOrigen +
+      trasladosDestino;
 
-      if (!municipio) {
-        throw new BadRequestException(
-          `municipio no existe: ${municipioBuscado}`,
-        );
-      }
-
-      return municipio.id_municipio;
+    if (totalRelaciones > 0) {
+      throw new BadRequestException(
+        'No se puede eliminar la bodega porque tiene registros relacionados. Inactívala en su lugar.',
+      );
     }
-
-    throw new BadRequestException('id_municipio es requerido');
   }
 
   async create(dto: CreateBodegaDto): Promise<BodegaPayload> {
-    const id_municipio = await this.resolveMunicipioId(dto);
+    await this.assertMunicipioExists(dto.id_municipio);
 
     return this.prisma.bodega.create({
       data: {
         nombre_bodega: dto.nombre_bodega.trim(),
         direccion: dto.direccion.trim(),
-        id_municipio,
+        id_municipio: dto.id_municipio,
         estado: dto.estado ?? true,
       },
       select: bodegaSelect,
@@ -113,9 +158,8 @@ export class BodegaService {
       where.id_municipio = query.id_municipio;
     }
 
-    if (query.q?.trim()) {
+    if (query.q && query.q.trim()) {
       const q = query.q.trim();
-
       where.OR = [
         { nombre_bodega: { contains: q } },
         { direccion: { contains: q } },
@@ -130,7 +174,18 @@ export class BodegaService {
         return this.prisma.bodega.findMany({
           where,
           orderBy: { id_bodega: 'desc' },
-          include: { municipios: true },
+          include: {
+            municipios: {
+              include: {
+                departamentos: true,
+              },
+            },
+            _count: {
+              select: {
+                bodegas_por_usuario: true,
+              },
+            },
+          },
         });
       }
 
@@ -141,8 +196,8 @@ export class BodegaService {
       });
     }
 
-    const page = Math.max(query.page ?? 1, 1);
-    const limit = Math.max(query.limit ?? 10, 1);
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
     const skip = (page - 1) * limit;
 
     if (includeMunicipio) {
@@ -153,7 +208,18 @@ export class BodegaService {
           skip,
           take: limit,
           orderBy: { id_bodega: 'desc' },
-          include: { municipios: true },
+          include: {
+            municipios: {
+              include: {
+                departamentos: true,
+              },
+            },
+            _count: {
+              select: {
+                bodegas_por_usuario: true,
+              },
+            },
+          },
         }),
       ]);
 
@@ -190,7 +256,18 @@ export class BodegaService {
     if (includeMunicipio) {
       const bodega = await this.prisma.bodega.findUnique({
         where: { id_bodega: id },
-        include: { municipios: true },
+        include: {
+          municipios: {
+            include: {
+              departamentos: true,
+            },
+          },
+          _count: {
+            select: {
+              bodegas_por_usuario: true,
+            },
+          },
+        },
       });
 
       if (!bodega) {
@@ -213,27 +290,27 @@ export class BodegaService {
   }
 
   async update(id: number, dto: UpdateBodegaDto): Promise<BodegaPayload> {
-    await this.ensureBodegaExists(id);
+    await this.assertBodegaExists(id);
 
-    const data: Prisma.bodegaUncheckedUpdateInput = {
-      nombre_bodega: dto.nombre_bodega?.trim(),
-      direccion: dto.direccion?.trim(),
-      estado: dto.estado,
-    };
-
-    if (dto.id_municipio !== undefined || dto.municipio?.trim()) {
-      data.id_municipio = await this.resolveMunicipioId(dto);
+    if (dto.id_municipio !== undefined) {
+      await this.assertMunicipioExists(dto.id_municipio);
     }
 
     return this.prisma.bodega.update({
       where: { id_bodega: id },
-      data,
+      data: {
+        nombre_bodega: dto.nombre_bodega?.trim(),
+        direccion: dto.direccion?.trim(),
+        id_municipio: dto.id_municipio,
+        estado: dto.estado,
+      },
       select: bodegaSelect,
     });
   }
 
   async disable(id: number): Promise<BodegaPayload> {
-    await this.ensureBodegaExists(id);
+    await this.assertBodegaExists(id);
+    await this.assertCanDisable(id);
 
     return this.prisma.bodega.update({
       where: { id_bodega: id },
@@ -243,11 +320,21 @@ export class BodegaService {
   }
 
   async enable(id: number): Promise<BodegaPayload> {
-    await this.ensureBodegaExists(id);
+    await this.assertBodegaExists(id);
 
     return this.prisma.bodega.update({
       where: { id_bodega: id },
       data: { estado: true },
+      select: bodegaSelect,
+    });
+  }
+
+  async remove(id: number): Promise<BodegaPayload> {
+    await this.assertBodegaExists(id);
+    await this.assertCanDelete(id);
+
+    return this.prisma.bodega.delete({
+      where: { id_bodega: id },
       select: bodegaSelect,
     });
   }

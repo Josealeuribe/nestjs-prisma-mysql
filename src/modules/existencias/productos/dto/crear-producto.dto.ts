@@ -1,15 +1,15 @@
 import {
   IsBoolean,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
-  MinLength,
 } from 'class-validator';
 
 export class CreateProductoDto {
   @IsString()
-  @MinLength(3)
+  @IsNotEmpty()
   @MaxLength(150)
   nombre_producto: string;
 
@@ -17,11 +17,6 @@ export class CreateProductoDto {
   @IsString()
   @MaxLength(255)
   descripcion?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  codigo_barras?: string;
 
   @IsInt()
   id_categoria_producto: number;

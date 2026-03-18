@@ -7,15 +7,14 @@ export const existenciaListSelect =
     id_bodega: true,
     nota: true,
     cantidad: true,
+    cantidad_reservada: true,
     fecha_vencimiento: true,
     lote: true,
     producto: {
       select: {
         id_producto: true,
-        codigo_producto: true,
         nombre_producto: true,
         descripcion: true,
-        codigo_barras: true,
         estado: true,
         iva: {
           select: {

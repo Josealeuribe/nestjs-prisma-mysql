@@ -5,9 +5,11 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class TerminoPagoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
+  findAll() {
     return this.prisma.termino_pago.findMany({
-      orderBy: { nombre_termino: 'asc' },
+      orderBy: {
+        nombre_termino: 'asc',
+      },
       select: {
         id_termino_pago: true,
         nombre_termino: true,

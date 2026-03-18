@@ -1,3 +1,5 @@
+import { Prisma } from '@prisma/client';
+
 export const usuarioSelect = {
   id_usuario: true,
   nombre: true,
@@ -12,17 +14,17 @@ export const usuarioSelect = {
   img_url: true,
   id_genero: true,
 
-  roles: {
-    select: {
-      id_rol: true,
-      nombre_rol: true,
-    },
-  },
-
   tipo_documento: {
     select: {
       id_tipo_doc: true,
       nombre_doc: true,
+    },
+  },
+
+  roles: {
+    select: {
+      id_rol: true,
+      nombre_rol: true,
     },
   },
 
@@ -34,14 +36,21 @@ export const usuarioSelect = {
   },
 
   bodegas_por_usuario: {
+    where: {
+      estado: true,
+    },
     select: {
       id_bodega: true,
+      estado: true,
       bodega: {
         select: {
           id_bodega: true,
           nombre_bodega: true,
+          direccion: true,
+          id_municipio: true,
+          estado: true,
         },
       },
     },
   },
-} as const;
+} satisfies Prisma.usuarioSelect;

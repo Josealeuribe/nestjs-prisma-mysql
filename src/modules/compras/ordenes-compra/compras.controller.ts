@@ -22,38 +22,38 @@ export class ComprasController {
 
   @Post()
   create(@Req() req: any, @Body() dto: CreateCompraDto) {
-    const idUsuario = req.user.id_usuario;
-
-    // ✅ bodega activa desde JWT (misma lógica que findAll)
-    const idBodegaActiva = req.user.id_bodega_activa;
-
-    const bodegasPermitidas = req.user.bodegasPermitidas as number[] | undefined;
-
     return this.comprasService.create(dto, {
-      idUsuario,
-      idBodegaActiva,
-      bodegasPermitidas,
+      idUsuario: req.user.id_usuario,
     });
   }
 
   @Get()
   findAll(@Req() req: any, @Query('id_bodega') id_bodega?: string) {
-    const bodegasPermitidas = req.user.bodegasPermitidas as number[] | undefined;
-
-    // si viene id_bodega por query lo usamos, si no usamos la activa
-    const idBodegaActiva = req.user.id_bodega_activa;
-    const idBodegaScope = id_bodega ? Number(id_bodega) : idBodegaActiva;
-
     return this.comprasService.findAll({
-      idBodegaScope,
-      bodegasPermitidas,
+      idUsuario: req.user.id_usuario,
+      idBodegaScope: id_bodega ? Number(id_bodega) : undefined,
     });
   }
 
   @Get(':id')
   findOne(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
-    const bodegasPermitidas = req.user.bodegasPermitidas as number[] | undefined;
-    return this.comprasService.findOne(id, { bodegasPermitidas });
+    return this.comprasService.findOne(id, {
+      idUsuario: req.user.id_usuario,
+    });
+  }
+
+  @Patch(':id/aprobar')
+  aprobar(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
+    return this.comprasService.aprobar(id, {
+      idUsuario: req.user.id_usuario,
+    });
+  }
+
+  @Patch(':id/anular')
+  anular(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
+    return this.comprasService.anular(id, {
+      idUsuario: req.user.id_usuario,
+    });
   }
 
   @Patch(':id')
@@ -62,8 +62,8 @@ export class ComprasController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCompraDto,
   ) {
-    const idUsuario = req.user.id_usuario;
-    const bodegasPermitidas = req.user.bodegasPermitidas as number[] | undefined;
-    return this.comprasService.update(id, dto, { idUsuario, bodegasPermitidas });
+    return this.comprasService.update(id, dto, {
+      idUsuario: req.user.id_usuario,
+    });
   }
 }

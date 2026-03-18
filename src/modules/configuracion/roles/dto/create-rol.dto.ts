@@ -1,24 +1,23 @@
 import {
-  ArrayUnique,
-  IsArray,
   IsBoolean,
-  IsInt,
-  IsNotEmpty,
   IsOptional,
   IsString,
-  Length,
+  MaxLength,
+  MinLength,
+  IsInt,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateRolDto {
   @IsString()
-  @IsNotEmpty()
-  @Length(3, 50)
+  @MaxLength(50)
+  @MinLength(3)
   nombre_rol: string;
 
   @IsString()
-  @IsNotEmpty()
-  @Length(10, 200)
+  @MaxLength(200)
+  @MinLength(10)
   descripcion: string;
 
   @IsOptional()
@@ -26,8 +25,7 @@ export class CreateRolDto {
   estado?: boolean;
 
   @IsOptional()
-  @IsArray()
-  @ArrayUnique()
+  @Type(() => Number)
   @IsInt({ each: true })
   @Min(1, { each: true })
   ids_permisos?: number[];
