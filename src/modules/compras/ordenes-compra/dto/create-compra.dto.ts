@@ -13,10 +13,18 @@ import {
 import { DetalleItemDto } from './detalle-item.dto';
 
 export class CreateCompraDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  id_bodega?: number;
+
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   id_proveedor: number;
 
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   id_termino_pago: number;
@@ -26,7 +34,6 @@ export class CreateCompraDto {
   @MaxLength(5000)
   descripcion?: string;
 
-  // Si quieres fecha de entrega opcional
   @IsOptional()
   @IsDateString()
   fecha_entrega?: string;

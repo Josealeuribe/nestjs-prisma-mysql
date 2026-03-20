@@ -15,6 +15,10 @@ import { ConfiguracionModule } from './modules/configuracion/configuracion.modul
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { PermisosModule } from './modules/configuracion/permisos/permisos.module';
 import { TipoProveedorModule } from './modules/tipo-proveedor/tipo-proveedor.module';
+import { MunicipioModule } from './modules/municipios/municipio.module';
+import { CatalogosModule } from './modules/catalogos/catalogos.module';
+import { TipoDocumentoModule } from './modules/tipo-documento/tipo-documento.module';
+import { TerminoPagoModule } from './modules/termino-pago/termino-pago.module';
 
 @Module({
   imports: [
@@ -30,10 +34,11 @@ import { TipoProveedorModule } from './modules/tipo-proveedor/tipo-proveedor.mod
     ConfiguracionModule,
     UsuariosModule,
     PermisosModule,
-    // CatalogosModule,
-    // TipoDocumentoModule,
+    CatalogosModule,
+    TipoDocumentoModule,
     TipoProveedorModule,
-    // MunicipioModule,
+    MunicipioModule,
+    TerminoPagoModule,
   ],
   controllers: [AppController],
   providers: [AppService],
