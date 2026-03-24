@@ -246,7 +246,51 @@ export class RemisionesCompraService {
   ) {
     const compra = await tx.compras.findUnique({
       where: { id_compra: idCompra },
-      select: compraContextoSelect,
+      select: {
+        id_compra: true,
+        codigo_compra: true,
+        id_bodega: true,
+        id_proveedor: true,
+        bodega: {
+          select: {
+            id_bodega: true,
+            nombre_bodega: true,
+          },
+        },
+        proveedor: {
+          select: {
+            id_proveedor: true,
+            nombre_empresa: true,
+            num_documento: true,
+            id_tipo_doc: true,
+            tipo_documento: {
+              select: {
+                nombre_doc: true,
+              },
+            },
+          },
+        },
+        detalle_compra: {
+          select: {
+            id_producto: true,
+            cantidad: true,
+            precio_unitario: true,
+            id_iva: true,
+            producto: {
+              select: {
+                id_producto: true,
+                nombre_producto: true,
+              },
+            },
+            iva: {
+              select: {
+                id_iva: true,
+                porcentaje: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!compra) {
@@ -317,7 +361,8 @@ export class RemisionesCompraService {
           proveedorId: compra.id_proveedor,
           proveedorNombre: compra.proveedor?.nombre_empresa ?? '',
           proveedorTipoDocumento:
-            compra.proveedor?.tipo_documento?.nombre_doc ?? '',
+            compra.proveedor?.tipo_documento?.nombre_doc ??
+            String(compra.proveedor?.id_tipo_doc ?? ''),
           proveedorNumeroDocumento: compra.proveedor?.num_documento ?? '',
           idBodega: compra.id_bodega,
           bodegaNombre: compra.bodega?.nombre_bodega ?? '',
