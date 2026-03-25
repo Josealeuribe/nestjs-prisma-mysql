@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { SolicitarRestablecimientoDto } from './dto/solicitar-restablecimiento.dto';
 import { generarTokenPlano, hashToken } from 'src/common/utils/password-setup.util';
-import { MailService } from '../mail/mail.service';
+import { MailService } from './mail/mail.service';
 
 @Injectable()
 export class RestablecerContrasenaService {

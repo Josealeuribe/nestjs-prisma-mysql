@@ -9,7 +9,7 @@ import { JwtStrategy } from './login/jwt/jwt.strategy';
 import { CrearContrasenaController } from './crear-contrasena.controller';
 import { CrearContrasenaService } from './crear-contrasena.service';
 import { RestablecerContrasenaService } from './restablecer-contrasena.service';
-import { MailModule } from '../mail/mail.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [

@@ -13,7 +13,7 @@ import { TipoDocumentoService } from '../usuarios/usuario/tipo-documento/tipo-do
 import { GeneroController } from './genero/genero.controller';
 import { GeneroService } from './genero/genero.service';
 
-import { MailModule } from '../mail/mail.module';
+import { MailModule } from '../auth/mail/mail.module';
 
 @Module({
   imports: [PrismaModule, MailModule],

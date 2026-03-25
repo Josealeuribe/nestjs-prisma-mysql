@@ -5,7 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { usuarioSelect } from './selects/usuario.select';
 import { Prisma } from '@prisma/client';
 import { ListUsuarioQueryDto } from './dto/list-usuario.query.dto';
-import { MailService } from 'src/modules/mail/mail.service';
+import { MailService } from 'src/modules/auth/mail/mail.service';
 import {
   BadRequestException,
   Injectable,
