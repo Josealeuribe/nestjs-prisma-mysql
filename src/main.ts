@@ -7,8 +7,9 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions-filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
   const logger = new Logger('Bootstrap');
+
+  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
   app.setGlobalPrefix('api');
   app.useGlobalFilters(new AllExceptionsFilter());
@@ -22,25 +23,20 @@ async function bootstrap() {
     }),
   );
 
-  const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
-    : [
-        'http://localhost:8081',
-        'http://localhost:3000',
-        'http://127.0.0.1:8081',
-        'http://127.0.0.1:3000',
-      ];
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
   app.enableCors({
-    origin: allowedOrigins,
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    origin: allowedOrigins && allowedOrigins.length > 0 ? allowedOrigins : true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
 
-  const port = process.env.PORT ?? 3001;
-  await app.listen(port);
+  const port = Number(process.env.PORT) || 3001;
 
-  logger.log(`🚀 API running on: http://localhost:${port}/api`);
+  await app.listen(port, '0.0.0.0');
+
+  logger.log(`🚀 API running on: http://0.0.0.0:${port}/api`);
 }
 void bootstrap();
