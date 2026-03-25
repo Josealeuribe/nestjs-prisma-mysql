@@ -5,7 +5,6 @@ import {
   IsOptional,
   IsString,
   MaxLength,
-  Min,
 } from 'class-validator';
 
 export class CreateProductoDto {
@@ -20,11 +19,9 @@ export class CreateProductoDto {
   descripcion?: string;
 
   @IsInt()
-  @Min(1)
   id_categoria_producto: number;
 
   @IsInt()
-  @Min(1)
   id_iva: number;
 
   @IsOptional()

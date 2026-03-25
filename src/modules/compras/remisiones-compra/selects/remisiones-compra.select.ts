@@ -28,6 +28,15 @@ export const remisionCompraListSelect =
     proveedor: {
       select: {
         id_proveedor: true,
+        nombre_empresa: true,
+        num_documento: true,
+        id_tipo_doc: true,
+        tipo_documento: {
+          select: {
+            id_tipo_doc: true,
+            nombre_doc: true,
+          },
+        },
       },
     },
 
@@ -41,6 +50,7 @@ export const remisionCompraListSelect =
     estado_remision_compra: {
       select: {
         id_estado_remision_compra: true,
+        nombre_estado: true,
       },
     },
 
@@ -57,6 +67,12 @@ export const remisionCompraListSelect =
         id_usuario: true,
         nombre: true,
         apellido: true,
+      },
+    },
+
+    _count: {
+      select: {
+        detalle_remision_compra: true,
       },
     },
   });
@@ -92,6 +108,15 @@ export const remisionCompraDetailSelect =
     proveedor: {
       select: {
         id_proveedor: true,
+        nombre_empresa: true,
+        num_documento: true,
+        id_tipo_doc: true,
+        tipo_documento: {
+          select: {
+            id_tipo_doc: true,
+            nombre_doc: true,
+          },
+        },
       },
     },
 
@@ -105,6 +130,7 @@ export const remisionCompraDetailSelect =
     estado_remision_compra: {
       select: {
         id_estado_remision_compra: true,
+        nombre_estado: true,
       },
     },
 
@@ -139,14 +165,22 @@ export const remisionCompraDetailSelect =
         producto: {
           select: {
             id_producto: true,
+            nombre_producto: true,
           },
         },
 
         iva: {
           select: {
             id_iva: true,
+            porcentaje: true,
           },
         },
+      },
+    },
+
+    _count: {
+      select: {
+        detalle_remision_compra: true,
       },
     },
   });

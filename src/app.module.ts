@@ -14,6 +14,8 @@ import { VentasModule } from './modules/ventas/ventas.module';
 import { ConfiguracionModule } from './modules/configuracion/configuracion.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { PermisosModule } from './modules/configuracion/permisos/permisos.module';
+import { TipoProveedorModule } from './modules/compras/proveedores/tipo-proveedor/tipo-proveedor.module';
+import { TerminoPagoModule } from './modules/compras/termino-pago/termino-pago.module';
 
 @Module({
   imports: [
@@ -28,6 +30,9 @@ import { PermisosModule } from './modules/configuracion/permisos/permisos.module
     VentasModule,
     ConfiguracionModule,
     UsuariosModule,
+    PermisosModule,
+    TipoProveedorModule,
+    TerminoPagoModule,
   ],
   controllers: [AppController],
   providers: [AppService],

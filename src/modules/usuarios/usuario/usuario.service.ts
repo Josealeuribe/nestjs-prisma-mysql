@@ -17,7 +17,6 @@ import {
   hashToken,
 } from 'src/common/utils/password-setup.util';
 
-
 export type UsuarioPayload = Prisma.usuarioGetPayload<{
   select: typeof usuarioSelect;
 }>;
@@ -25,12 +24,12 @@ export type UsuarioPayload = Prisma.usuarioGetPayload<{
 export type UsuariosFindAllResponse =
   | UsuarioPayload[]
   | {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
-    data: UsuarioPayload[];
-  };
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+      data: UsuarioPayload[];
+    };
 
 type PrismaKnownError = { code: string; meta?: unknown };
 
@@ -157,7 +156,10 @@ export class UsuarioService {
           enlace,
         });
       } catch (error) {
-        console.error('Error enviando correo de creación de contraseña:', error);
+        console.error(
+          'Error enviando correo de creación de contraseña:',
+          error,
+        );
       }
     });
 

@@ -66,7 +66,7 @@ const rolSelect = {
 
 @Injectable()
 export class RolesService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   private async validarPermisos(idsPermisos: number[]) {
     if (!idsPermisos?.length) return;
@@ -101,12 +101,12 @@ export class RolesService {
             estado: dto.estado ?? true,
             ...(idsPermisos.length
               ? {
-                roles_permisos: {
-                  create: idsPermisos.map((id_permiso) => ({
-                    id_permiso,
-                  })),
-                },
-              }
+                  roles_permisos: {
+                    create: idsPermisos.map((id_permiso) => ({
+                      id_permiso,
+                    })),
+                  },
+                }
               : {}),
           },
           select: rolSelect,
@@ -235,6 +235,8 @@ export class RolesService {
           select: rolSelect,
         });
       });
+
+      return this.findOne(id_rol);
     } catch (e: unknown) {
       if (isUniqueConstraintError(e, 'nombre_rol')) {
         throw new BadRequestException('Ya existe un rol con ese nombre');
@@ -259,5 +261,58 @@ export class RolesService {
     return this.prisma.roles.delete({
       where: { id_rol },
     });
+
+    return this.findOne(id_rol);
+  }
+
+  private async ensureExists(id_rol: number): Promise<roles> {
+    const rol = await this.prisma.roles.findUnique({
+      where: { id_rol },
+    });
+
+    if (!rol) {
+      throw new NotFoundException('Rol no encontrado');
+    }
+
+    return rol;
+  }
+
+  private normalizeIds(ids?: number[]): number[] {
+    if (!ids?.length) return [];
+
+    return [
+      ...new Set(ids.map(Number).filter((n) => Number.isInteger(n) && n > 0)),
+    ];
+  }
+
+  private async ensurePermisosExist(idsPermisos: number[]): Promise<void> {
+    if (idsPermisos.length === 0) return;
+
+    const permisosExistentes = await this.prisma.permisos.findMany({
+      where: {
+        id_permiso: {
+          in: idsPermisos,
+        },
+      },
+      select: {
+        id_permiso: true,
+      },
+    });
+
+    if (permisosExistentes.length !== idsPermisos.length) {
+      throw new BadRequestException('Uno o más permisos no existen');
+    }
+  }
+
+  private async ensureNoUsersAssigned(id_rol: number): Promise<void> {
+    const totalUsuarios = await this.prisma.usuario.count({
+      where: { id_rol },
+    });
+
+    if (totalUsuarios > 0) {
+      throw new BadRequestException(
+        'No puedes desactivar este rol porque tiene usuarios asignados',
+      );
+    }
   }
 }

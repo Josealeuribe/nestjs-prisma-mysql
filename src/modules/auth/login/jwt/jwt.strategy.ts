@@ -16,6 +16,8 @@ type AuthUser = {
   email: string;
   id_rol: number;
   id_bodega_activa: number;
+  rol: string;
+  permisos: string[];
 };
 
 @Injectable()
@@ -41,6 +43,20 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         id_usuario: true,
         email: true,
         id_rol: true,
+        roles: {
+          select: {
+            nombre_rol: true,
+            roles_permisos: {
+              select: {
+                permisos: {
+                  select: {
+                    nombre_permiso: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -48,9 +64,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Usuario no válido');
     }
 
+    const permisos =
+      usuario.roles?.roles_permisos.map((rp) => rp.permisos.nombre_permiso) ??
+      [];
+
     return {
-      ...usuario,
+      id_usuario: usuario.id_usuario,
+      email: usuario.email,
+      id_rol: usuario.id_rol,
       id_bodega_activa: payload.id_bodega_activa,
+      rol: usuario.roles?.nombre_rol ?? '',
+      permisos,
     };
   }
 }

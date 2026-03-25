@@ -8,7 +8,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateProductoDto } from './dto/crear-producto.dto';
 import { UpdateProductoDto } from './dto/update-producto.dto';
 import { ListProductoQueryDto } from './dto/list-producto.query.dto';
-import { productoSelect } from './iva/selects/producto.select';
+import { productoSelect } from './selects/producto.select';
 
 export type ProductoPayload = Prisma.productoGetPayload<{
   select: typeof productoSelect;
@@ -21,16 +21,16 @@ export type ProductoWithRefs = Prisma.productoGetPayload<{
 export type ProductosFindAllResponse =
   | ProductoPayload[]
   | {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
-    data: (ProductoPayload | ProductoWithRefs)[];
-  };
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+      data: (ProductoPayload | ProductoWithRefs)[];
+    };
 
 @Injectable()
 export class ProductosService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   private async assertCategoriaExists(id_categoria_producto: number) {
     const exists = await this.prisma.categoria_producto.findUnique({
@@ -75,10 +75,14 @@ export class ProductosService {
   ): Promise<ProductosFindAllResponse> {
     const where: Prisma.productoWhereInput = {};
 
-    if (query.estado !== undefined) where.estado = query.estado === 'true';
+    if (query.estado !== undefined) {
+      where.estado = query.estado === 'true';
+    }
+
     if (query.id_categoria_producto !== undefined) {
       where.id_categoria_producto = query.id_categoria_producto;
     }
+
     if (query.id_iva !== undefined) {
       where.id_iva = query.id_iva;
     }

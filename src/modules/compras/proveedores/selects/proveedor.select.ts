@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 
-export const proveedorSelect = {
+export const proveedorSelect = Prisma.validator<Prisma.proveedorSelect>()({
   id_proveedor: true,
   codigo_proveedor: true,
   num_documento: true,
@@ -13,4 +13,11 @@ export const proveedorSelect = {
   id_tipo_doc: true,
   id_municipio: true,
   estado: true,
-} satisfies Prisma.proveedorSelect; // si falla: Prisma.ProveedorSelect
+
+  tipo_documento: {
+    select: {
+      id_tipo_doc: true,
+      nombre_doc: true,
+    },
+  },
+});

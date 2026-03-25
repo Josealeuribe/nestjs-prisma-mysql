@@ -32,16 +32,16 @@ export type BodegaWithMunicipio = Prisma.bodegaGetPayload<{
 export type BodegasFindAllResponse =
   | BodegaPayload[]
   | {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
-    data: (BodegaPayload | BodegaWithMunicipio)[];
-  };
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+      data: (BodegaPayload | BodegaWithMunicipio)[];
+    };
 
 @Injectable()
 export class BodegaService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   private async assertMunicipioExists(id_municipio: number) {
     const exists = await this.prisma.municipios.findUnique({

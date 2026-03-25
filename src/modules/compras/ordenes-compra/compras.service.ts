@@ -5,7 +5,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaClient } from '@prisma/client/extension';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCompraDto } from './dto/create-compra.dto';
 import { UpdateCompraDto } from './dto/update-compra.dto';
@@ -13,41 +12,104 @@ import { compraDetailSelect, compraListSelect } from './selects/compras.select';
 
 type CreateOpts = {
   idUsuario: number;
-  idBodegaActiva: number;
-  bodegasPermitidas?: number[];
 };
 
 type ScopeOpts = {
-  bodegasPermitidas?: number[];
+  idUsuario: number;
 };
+
+type UpdateOpts = {
+  idUsuario: number;
+};
+
+type FindAllArgs = {
+  idUsuario: number;
+  idBodegaScope?: number;
+  soloAprobadas?: boolean;
+};
+
+const ESTADO_PENDIENTE = 1;
+const ESTADO_APROBADA = 2;
+const ESTADO_ANULADA = 3;
 
 @Injectable()
 export class ComprasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // -------------------------
-  // Helpers de seguridad
-  // -------------------------
-  private assertBodegaAccess(idBodega: number, bodegasPermitidas?: number[]) {
-    if (!idBodega || Number.isNaN(idBodega)) {
-      throw new BadRequestException('Bodega activa inválida');
+  private async getBodegasPermitidasUsuario(
+    idUsuario: number,
+  ): Promise<number[]> {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id_usuario: idUsuario },
+      select: {
+        id_usuario: true,
+        bodegas_por_usuario: {
+          select: {
+            id_bodega: true,
+          },
+        },
+      },
+    });
+
+    if (!usuario) {
+      throw new ForbiddenException('Usuario no válido');
     }
-    if (bodegasPermitidas?.length && !bodegasPermitidas.includes(idBodega)) {
+
+    const bodegas = usuario.bodegas_por_usuario.map((b) => b.id_bodega);
+
+    if (!bodegas.length) {
+      throw new ForbiddenException('El usuario no tiene bodegas asignadas');
+    }
+
+    return bodegas;
+  }
+
+  private assertBodegaAccess(
+    idBodega: number | undefined | null,
+    bodegasPermitidas: number[],
+  ) {
+    if (!idBodega || Number.isNaN(idBodega)) {
+      throw new BadRequestException('Debes seleccionar una bodega válida');
+    }
+
+    if (!bodegasPermitidas.includes(idBodega)) {
       throw new ForbiddenException('No tienes acceso a esta bodega');
     }
   }
 
-  private compraWhereScope(opts?: ScopeOpts): Prisma.comprasWhereInput {
-    if (opts?.bodegasPermitidas?.length) {
-      return { id_bodega: { in: opts.bodegasPermitidas } };
+  private parseDateOnly(value: string): Date {
+    const [year, month, day] = value.split('-').map(Number);
+
+    if (!year || !month || !day) {
+      throw new BadRequestException(`Fecha inválida: ${value}`);
     }
-    return {};
+
+    return new Date(year, month - 1, day, 12, 0, 0);
   }
 
-  // -------------------------
-  // Código CMP-0001 (backend)
-  // -------------------------
-  private async nextCodigoCompra(tx: PrismaClient, prefix = 'CMP', pad = 4) {
+  private getHoyDateOnly(): Date {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+  }
+
+  private assertDetalleSinDuplicados(detalle: Array<{ id_producto: number }>) {
+    const ids = detalle.map((d) => d.id_producto);
+    const duplicados = ids.filter((id, index) => ids.indexOf(id) !== index);
+
+    if (duplicados.length) {
+      throw new BadRequestException(
+        `Hay productos repetidos en el detalle: ${[
+          ...new Set(duplicados),
+        ].join(', ')}`,
+      );
+    }
+  }
+
+  private async nextCodigoCompra(
+    tx: Prisma.TransactionClient,
+    prefix = 'CMP',
+    pad = 4,
+  ) {
     const last = await tx.compras.findFirst({
       orderBy: { id_compra: 'desc' },
       select: { codigo_compra: true },
@@ -58,18 +120,96 @@ export class ComprasService {
     const lastNum = match ? Number(match[1]) : 0;
     const nextNum = lastNum + 1;
 
-    const nextCode = `${prefix}-${String(nextNum).padStart(pad, '0')}`;
-    return nextCode;
+    return `${prefix}-${String(nextNum).padStart(pad, '0')}`;
   }
 
-  // -------------------------
-  // Cálculo de totales
-  // -------------------------
+  private async validarReferencias(
+    tx: Prisma.TransactionClient,
+    dto: Partial<CreateCompraDto> & { id_estado_compra?: number },
+    idBodega: number,
+  ) {
+    const bodega = await tx.bodega.findUnique({
+      where: { id_bodega: idBodega },
+      select: { id_bodega: true },
+    });
+
+    if (!bodega) {
+      throw new BadRequestException(`Bodega inválida: ${idBodega}`);
+    }
+
+    if (dto.id_proveedor !== undefined) {
+      const proveedor = await tx.proveedor.findUnique({
+        where: { id_proveedor: dto.id_proveedor },
+        select: { id_proveedor: true },
+      });
+
+      if (!proveedor) {
+        throw new BadRequestException(`Proveedor inválido: ${dto.id_proveedor}`);
+      }
+    }
+
+    if (dto.id_termino_pago !== undefined) {
+      const termino = await tx.termino_pago.findUnique({
+        where: { id_termino_pago: dto.id_termino_pago },
+        select: { id_termino_pago: true },
+      });
+
+      if (!termino) {
+        throw new BadRequestException(
+          `Término de pago inválido: ${dto.id_termino_pago}`,
+        );
+      }
+    }
+
+    if (dto.id_estado_compra !== undefined) {
+      const estado = await tx.estado_compra.findUnique({
+        where: { id_estado_compra: dto.id_estado_compra },
+        select: { id_estado_compra: true },
+      });
+
+      if (!estado) {
+        throw new BadRequestException(
+          `Estado de compra inválido: ${dto.id_estado_compra}`,
+        );
+      }
+    }
+
+    if (dto.detalle?.length) {
+      const productoIds = [...new Set(dto.detalle.map((d) => d.id_producto))];
+      const ivaIds = [...new Set(dto.detalle.map((d) => d.id_iva))];
+
+      const productos = await tx.producto.findMany({
+        where: { id_producto: { in: productoIds } },
+        select: { id_producto: true },
+      });
+
+      const ivas = await tx.iva.findMany({
+        where: { id_iva: { in: ivaIds } },
+        select: { id_iva: true },
+      });
+
+      if (productos.length !== productoIds.length) {
+        const encontrados = new Set(productos.map((p) => p.id_producto));
+        const faltantes = productoIds.filter((id) => !encontrados.has(id));
+
+        throw new BadRequestException(
+          `Productos inválidos: ${faltantes.join(', ')}`,
+        );
+      }
+
+      if (ivas.length !== ivaIds.length) {
+        const encontrados = new Set(ivas.map((i) => i.id_iva));
+        const faltantes = ivaIds.filter((id) => !encontrados.has(id));
+
+        throw new BadRequestException(`IVA inválidos: ${faltantes.join(', ')}`);
+      }
+    }
+  }
+
   private async calcularTotales(
-    tx: PrismaClient,
+    tx: Prisma.TransactionClient,
     detalle: CreateCompraDto['detalle'],
   ) {
-    // Traemos porcentajes de IVA en 1 consulta (evita N+1)
     const ivaIds = [...new Set(detalle.map((d) => d.id_iva))];
 
     const ivas = await tx.iva.findMany({
@@ -78,13 +218,8 @@ export class ComprasService {
     });
 
     const ivaMap = new Map<number, Prisma.Decimal>();
-    for (const i of ivas) ivaMap.set(i.id_iva, i.porcentaje);
-
-    // valida que existan todos los IVA
-    for (const item of detalle) {
-      if (!ivaMap.has(item.id_iva)) {
-        throw new BadRequestException(`IVA inválido: ${item.id_iva}`);
-      }
+    for (const iva of ivas) {
+      ivaMap.set(iva.id_iva, iva.porcentaje);
     }
 
     let subtotal = new Prisma.Decimal(0);
@@ -95,7 +230,11 @@ export class ComprasService {
       const price = new Prisma.Decimal(item.precio_unitario);
       const lineSub = qty.mul(price);
 
-      const pct = ivaMap.get(item.id_iva)!; // decimal (ej 19.00)
+      const pct = ivaMap.get(item.id_iva);
+      if (!pct) {
+        throw new BadRequestException(`IVA inválido: ${item.id_iva}`);
+      }
+
       const lineIva = lineSub.mul(pct).div(100);
 
       subtotal = subtotal.add(lineSub);
@@ -104,7 +243,6 @@ export class ComprasService {
 
     const total = subtotal.add(totalIva);
 
-    // Redondeo a 2 decimales (si deseas)
     const r2 = (d: Prisma.Decimal) => new Prisma.Decimal(d.toFixed(2));
 
     return {
@@ -114,37 +252,40 @@ export class ComprasService {
     };
   }
 
-  // -------------------------
-  // CRUD
-  // -------------------------
-
   async create(dto: CreateCompraDto, opts: CreateOpts) {
-    this.assertBodegaAccess(opts.idBodegaActiva, opts.bodegasPermitidas);
+    const bodegasPermitidas = await this.getBodegasPermitidasUsuario(
+      opts.idUsuario,
+    );
 
-    // estado inicial (ajusta al id real que uses en estado_compra)
-    const ESTADO_INICIAL = 1;
+    const idBodegaFinal =
+      dto.id_bodega ??
+      (bodegasPermitidas.length === 1 ? bodegasPermitidas[0] : undefined);
+
+    this.assertBodegaAccess(idBodegaFinal, bodegasPermitidas);
+    this.assertDetalleSinDuplicados(dto.detalle);
 
     return this.prisma.$transaction(async (tx) => {
+      await this.validarReferencias(tx, dto, idBodegaFinal!);
+
       const codigo_compra = await this.nextCodigoCompra(tx, 'CMP', 4);
       const totales = await this.calcularTotales(tx, dto.detalle);
 
       const compra = await tx.compras.create({
         data: {
           codigo_compra,
-          fecha_solicitud: new Date(), // hoy
+          fecha_solicitud: this.getHoyDateOnly(),
           id_proveedor: dto.id_proveedor,
           id_termino_pago: dto.id_termino_pago,
           descripcion: dto.descripcion ?? null,
-
           subtotal: totales.subtotal,
           total_iva: totales.total_iva,
           total: totales.total,
-
-          id_estado_compra: ESTADO_INICIAL,
+          fecha_entrega: dto.fecha_entrega
+            ? this.parseDateOnly(dto.fecha_entrega)
+            : null,
+          id_estado_compra: ESTADO_PENDIENTE,
           id_usuario_creador: opts.idUsuario,
-          id_bodega: opts.idBodegaActiva,
-          fecha_entrega: dto.fecha_entrega ? new Date(dto.fecha_entrega) : null,
-
+          id_bodega: idBodegaFinal!,
           detalle_compra: {
             create: dto.detalle.map((d) => ({
               id_producto: d.id_producto,
@@ -161,54 +302,109 @@ export class ComprasService {
     });
   }
 
-  async findAll(args: { idBodegaScope: number; bodegasPermitidas?: number[] }) {
-    this.assertBodegaAccess(args.idBodegaScope, args.bodegasPermitidas);
+  async findAll(args: {
+    idUsuario: number;
+    idBodegaScope?: number;
+    soloAprobadas?: boolean;
+  }) {
+    const bodegasPermitidas = await this.getBodegasPermitidasUsuario(
+      args.idUsuario,
+    );
+
+    const whereBase = {
+      ...(args.soloAprobadas ? { id_estado_compra: ESTADO_APROBADA } : {}),
+    };
+
+    if (args.idBodegaScope !== undefined) {
+      this.assertBodegaAccess(args.idBodegaScope, bodegasPermitidas);
+
+      return this.prisma.compras.findMany({
+        where: {
+          ...whereBase,
+          id_bodega: args.idBodegaScope,
+        },
+        orderBy: { id_compra: 'desc' },
+        select: compraListSelect,
+      });
+    }
 
     return this.prisma.compras.findMany({
       where: {
-        ...this.compraWhereScope({ bodegasPermitidas: args.bodegasPermitidas }),
-        id_bodega: args.idBodegaScope,
+        ...whereBase,
+        id_bodega: { in: bodegasPermitidas },
       },
       orderBy: { id_compra: 'desc' },
       select: compraListSelect,
     });
   }
 
-  async findOne(id: number, opts?: ScopeOpts) {
+  async findOne(id: number, opts: ScopeOpts) {
     const compra = await this.prisma.compras.findUnique({
       where: { id_compra: id },
       select: compraDetailSelect,
     });
 
-    if (!compra) throw new NotFoundException('Compra no encontrada');
+    if (!compra) {
+      throw new NotFoundException('Compra no encontrada');
+    }
 
-    // scope bodega
-    if (opts?.bodegasPermitidas?.length && !opts.bodegasPermitidas.includes(compra.id_bodega)) {
+    const bodegasPermitidas = await this.getBodegasPermitidasUsuario(
+      opts.idUsuario,
+    );
+
+    if (!bodegasPermitidas.includes(compra.id_bodega)) {
       throw new ForbiddenException('No tienes acceso a esta compra');
     }
 
     return compra;
   }
 
-  async update(id: number, dto: UpdateCompraDto, opts: { idUsuario: number; bodegasPermitidas?: number[] }) {
-    const actual = await this.findOne(id, { bodegasPermitidas: opts.bodegasPermitidas });
+  async update(id: number, dto: UpdateCompraDto, opts: UpdateOpts) {
+    const actual = await this.findOne(id, { idUsuario: opts.idUsuario });
 
-    // regla opcional: solo creador puede editar (si quieres)
-    // if (actual.id_usuario_creador !== opts.idUsuario) {
-    //   throw new ForbiddenException('Solo el creador puede editar la compra');
-    // }
+    if (actual.id_estado_compra === ESTADO_ANULADA) {
+      throw new BadRequestException('No puedes editar una compra anulada');
+    }
 
-    // si mandan detalle, recalculamos y reemplazamos detalle completo
+    if (actual.id_estado_compra === ESTADO_APROBADA) {
+      throw new BadRequestException('No puedes editar una compra aprobada');
+    }
+
+    const bodegasPermitidas = await this.getBodegasPermitidasUsuario(
+      opts.idUsuario,
+    );
+
+    const idBodegaFinal =
+      dto.id_bodega ??
+      actual.id_bodega ??
+      (bodegasPermitidas.length === 1 ? bodegasPermitidas[0] : undefined);
+
+    this.assertBodegaAccess(idBodegaFinal, bodegasPermitidas);
+
+    if (dto.detalle?.length) {
+      this.assertDetalleSinDuplicados(dto.detalle);
+    }
+
     return this.prisma.$transaction(async (tx) => {
-      let totales: { subtotal: Prisma.Decimal; total_iva: Prisma.Decimal; total: Prisma.Decimal } | null = null;
+      await this.validarReferencias(
+        tx,
+        dto as Partial<CreateCompraDto> & { id_estado_compra?: number },
+        idBodegaFinal!,
+      );
+
+      let totales: {
+        subtotal: Prisma.Decimal;
+        total_iva: Prisma.Decimal;
+        total: Prisma.Decimal;
+      } | null = null;
 
       if (dto.detalle?.length) {
         totales = await this.calcularTotales(tx, dto.detalle);
 
-        // borrar detalle actual (por PK compuesta id_compra + id_producto)
-        await tx.detalle_compra.deleteMany({ where: { id_compra: id } });
+        await tx.detalle_compra.deleteMany({
+          where: { id_compra: id },
+        });
 
-        // crear nuevo detalle
         await tx.detalle_compra.createMany({
           data: dto.detalle.map((d) => ({
             id_compra: id,
@@ -223,20 +419,66 @@ export class ComprasService {
       const updated = await tx.compras.update({
         where: { id_compra: id },
         data: {
+          id_bodega: dto.id_bodega ? idBodegaFinal : undefined,
           id_proveedor: dto.id_proveedor ?? undefined,
           id_termino_pago: dto.id_termino_pago ?? undefined,
           descripcion: dto.descripcion ?? undefined,
-          fecha_entrega: dto.fecha_entrega ? new Date(dto.fecha_entrega) : undefined,
+          fecha_entrega: dto.fecha_entrega
+            ? this.parseDateOnly(dto.fecha_entrega)
+            : undefined,
           id_estado_compra: dto.id_estado_compra ?? undefined,
-
           ...(totales
-            ? { subtotal: totales.subtotal, total_iva: totales.total_iva, total: totales.total }
+            ? {
+                subtotal: totales.subtotal,
+                total_iva: totales.total_iva,
+                total: totales.total,
+              }
             : {}),
         },
         select: compraDetailSelect,
       });
 
       return updated;
+    });
+  }
+
+  async aprobar(id: number, opts: ScopeOpts) {
+    const actual = await this.findOne(id, { idUsuario: opts.idUsuario });
+
+    if (actual.id_estado_compra === ESTADO_ANULADA) {
+      throw new BadRequestException('No puedes aprobar una compra anulada');
+    }
+
+    if (actual.id_estado_compra === ESTADO_APROBADA) {
+      throw new BadRequestException('La compra ya está aprobada');
+    }
+
+    return this.prisma.compras.update({
+      where: { id_compra: id },
+      data: {
+        id_estado_compra: ESTADO_APROBADA,
+      },
+      select: compraDetailSelect,
+    });
+  }
+
+  async anular(id: number, opts: ScopeOpts) {
+    const actual = await this.findOne(id, { idUsuario: opts.idUsuario });
+
+    if (actual.id_estado_compra === ESTADO_ANULADA) {
+      throw new BadRequestException('La compra ya está anulada');
+    }
+
+    if (actual.id_estado_compra === ESTADO_APROBADA) {
+      throw new BadRequestException('No puedes anular una compra aprobada');
+    }
+
+    return this.prisma.compras.update({
+      where: { id_compra: id },
+      data: {
+        id_estado_compra: ESTADO_ANULADA,
+      },
+      select: compraDetailSelect,
     });
   }
 }
