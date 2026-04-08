@@ -16,10 +16,11 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { PermisosModule } from './modules/configuracion/permisos/permisos.module';
 import { TipoProveedorModule } from './modules/compras/proveedores/tipo-proveedor/tipo-proveedor.module';
 import { TerminoPagoModule } from './modules/compras/termino-pago/termino-pago.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }), // ✅ para leer .env (JWT_SECRET, etc.)
+    ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     PermisosModule,
     AuthModule,
@@ -30,9 +31,9 @@ import { TerminoPagoModule } from './modules/compras/termino-pago/termino-pago.m
     VentasModule,
     ConfiguracionModule,
     UsuariosModule,
-    PermisosModule,
     TipoProveedorModule,
     TerminoPagoModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
