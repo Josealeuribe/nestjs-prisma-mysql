@@ -64,7 +64,11 @@ export class NotificacionesService {
 
     const rows = await this.prisma.notificacion_usuario.findMany({
       where,
-      orderBy: [{ leida: 'asc' }, { fecha_evento: 'desc' }, { fecha_generada: 'desc' }],
+      orderBy: [
+        { leida: 'asc' },
+        { fecha_evento: 'desc' },
+        { fecha_generada: 'desc' },
+      ],
       take: query.limit ?? 50,
     });
 
@@ -220,8 +224,13 @@ export class NotificacionesService {
       existing.map((item) => [item.hash_unico, item]),
     );
 
-    const operations: any[] = [];
     const now = new Date();
+
+    const createData: any[] = [];
+    const updatesToRun: Array<{
+      id_notificacion_usuario: number;
+      data: Record<string, any>;
+    }> = [];
 
     for (const alert of alerts) {
       const current = existingMap.get(alert.hash_unico);
@@ -244,56 +253,44 @@ export class NotificacionesService {
       };
 
       if (!current) {
-        operations.push(
-          this.prisma.notificacion_usuario.create({
-            data: {
-              id_usuario: user.id_usuario,
-              hash_unico: alert.hash_unico,
-              ...commonData,
-              leida: false,
-              archivada: false,
-              eliminada: false,
-              fecha_generada: now,
-              fecha_leida: null,
-              fecha_archivada: null,
-              fecha_eliminada: null,
-            },
-          }),
-        );
+        createData.push({
+          id_usuario: user.id_usuario,
+          hash_unico: alert.hash_unico,
+          ...commonData,
+          leida: false,
+          archivada: false,
+          eliminada: false,
+          fecha_generada: now,
+          fecha_leida: null,
+          fecha_archivada: null,
+          fecha_eliminada: null,
+        });
         continue;
       }
 
       if (!current.activa) {
-        operations.push(
-          this.prisma.notificacion_usuario.update({
-            where: {
-              id_notificacion_usuario: current.id_notificacion_usuario,
-            },
-            data: {
-              ...commonData,
-              leida: false,
-              archivada: false,
-              eliminada: false,
-              fecha_generada: now,
-              fecha_leida: null,
-              fecha_archivada: null,
-              fecha_eliminada: null,
-            },
-          }),
-        );
+        updatesToRun.push({
+          id_notificacion_usuario: current.id_notificacion_usuario,
+          data: {
+            ...commonData,
+            leida: false,
+            archivada: false,
+            eliminada: false,
+            fecha_generada: now,
+            fecha_leida: null,
+            fecha_archivada: null,
+            fecha_eliminada: null,
+          },
+        });
         continue;
       }
 
-      operations.push(
-        this.prisma.notificacion_usuario.update({
-          where: {
-            id_notificacion_usuario: current.id_notificacion_usuario,
-          },
-          data: {
-            ...commonData,
-          },
-        }),
-      );
+      updatesToRun.push({
+        id_notificacion_usuario: current.id_notificacion_usuario,
+        data: {
+          ...commonData,
+        },
+      });
     }
 
     const deactivateWhere: any = {
@@ -311,18 +308,32 @@ export class NotificacionesService {
       };
     }
 
-    operations.push(
-      this.prisma.notificacion_usuario.updateMany({
-        where: deactivateWhere,
-        data: {
-          activa: false,
-        },
-      }),
-    );
+    await this.withRetry(async () => {
+      await this.prisma.$transaction(async (tx) => {
+        if (createData.length > 0) {
+          await tx.notificacion_usuario.createMany({
+            data: createData,
+            skipDuplicates: true,
+          });
+        }
 
-    if (operations.length > 0) {
-      await this.prisma.$transaction(operations);
-    }
+        for (const item of updatesToRun) {
+          await tx.notificacion_usuario.update({
+            where: {
+              id_notificacion_usuario: item.id_notificacion_usuario,
+            },
+            data: item.data,
+          });
+        }
+
+        await tx.notificacion_usuario.updateMany({
+          where: deactivateWhere,
+          data: {
+            activa: false,
+          },
+        });
+      });
+    });
 
     return {
       generated: alerts.length,
@@ -468,7 +479,7 @@ export class NotificacionesService {
         fecha_evento: traslado.fecha_traslado,
         metadata: {
           id: traslado.id_traslado,
-          codigo: codigo,
+          codigo,
           bodegaOrigen: origen,
           bodegaDestino: destino,
           items: traslado._count.detalle_traslado,
@@ -605,8 +616,8 @@ export class NotificacionesService {
             id: row.id_producto,
             nombre: producto,
           },
-          lote: lote,
-          bodega: bodega,
+          lote,
+          bodega,
           cantidadDisponible: disponible,
           fechaVencimiento: this.toDateOnlyString(row.fecha_vencimiento),
           diasParaVencer,
@@ -758,5 +769,42 @@ export class NotificacionesService {
     return Math.floor(
       (toOnly.getTime() - fromOnly.getTime()) / (1000 * 60 * 60 * 24),
     );
+  }
+
+  private async withRetry<T>(
+    operation: () => Promise<T>,
+    maxRetries = 3,
+    baseDelayMs = 120,
+  ): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        lastError = error;
+
+        const message = String(error?.message ?? '').toLowerCase();
+        const code = String(error?.code ?? '');
+
+        const isRetryable =
+          code === 'P2034' ||
+          message.includes('deadlock') ||
+          message.includes('write conflict') ||
+          message.includes('transaction failed');
+
+        if (!isRetryable || attempt === maxRetries) {
+          throw error;
+        }
+
+        await this.sleep(baseDelayMs * attempt);
+      }
+    }
+
+    throw lastError;
+  }
+
+  private sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
