@@ -60,7 +60,7 @@ const UMBRAL_STOCK_BAJO = 10;
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async getResumen(
     query: DashboardResumenQueryDto,
@@ -109,7 +109,7 @@ export class DashboardService {
           },
           fecha_factura: {
             gte: fechas.inicioMes,
-            lt: fechas.manana,
+            lt: fechas.inicioMesSiguiente,
           },
           remision_venta: {
             some: {
@@ -207,7 +207,7 @@ export class DashboardService {
           },
           fecha_solicitud: {
             gte: fechas.inicioMes,
-            lt: fechas.manana,
+            lt: fechas.inicioMesSiguiente,
           },
         },
         _sum: {
@@ -409,15 +409,44 @@ export class DashboardService {
       stockPorProducto.set(row.id_producto, acumulado + disponible);
     }
 
+    const productosActivosRows = await this.prisma.producto.findMany({
+      where: {
+        estado: true,
+      },
+      select: {
+        id_producto: true,
+        existencias: {
+          where: {
+            id_bodega: {
+              in: scope.ids_bodegas,
+            },
+          },
+          select: {
+            cantidad: true,
+            cantidad_reservada: true,
+          },
+        },
+      },
+    });
+
     let productosConStock = 0;
     let productosStockBajo = 0;
 
-    for (const [, stockDisponible] of stockPorProducto.entries()) {
+    for (const producto of productosActivosRows) {
+      const stockDisponible = producto.existencias.reduce((acc, row) => {
+        const disponible = Math.max(
+          this.toNumber(row.cantidad) - this.toNumber(row.cantidad_reservada),
+          0,
+        );
+
+        return acc + disponible;
+      }, 0);
+
       if (stockDisponible > 0) {
         productosConStock += 1;
       }
 
-      if (stockDisponible > 0 && stockDisponible < UMBRAL_STOCK_BAJO) {
+      if (stockDisponible < UMBRAL_STOCK_BAJO) {
         productosStockBajo += 1;
       }
     }
@@ -456,7 +485,7 @@ export class DashboardService {
       periodo: {
         etiqueta: this.getPeriodoLabel(fechas.hoy),
         fecha_inicio: this.formatDateOnly(fechas.inicioMes),
-        fecha_fin: this.formatDateOnly(fechas.hoy),
+        fecha_fin: this.formatDateOnly(fechas.finMes),
       },
       ventas: {
         total_mes_actual: this.toNumber(ventasMesActualAgg._sum.total),
@@ -553,12 +582,22 @@ export class DashboardService {
 
   private getDateRanges() {
     const hoy = new Date();
+
     const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const inicioMesSiguiente = new Date(
+      hoy.getFullYear(),
+      hoy.getMonth() + 1,
+      1,
+    );
+
+    const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+
     const manana = new Date(
       hoy.getFullYear(),
       hoy.getMonth(),
       hoy.getDate() + 1,
     );
+
     const proximos30Dias = new Date(
       hoy.getFullYear(),
       hoy.getMonth(),
@@ -570,6 +609,8 @@ export class DashboardService {
     return {
       hoy: hoySinHora,
       inicioMes,
+      inicioMesSiguiente,
+      finMes,
       manana,
       proximos30Dias,
     };

@@ -465,7 +465,7 @@ export class TrasladosService {
       await this.validarExistencias(tx, dto.id_bodega_origen, dto.detalle);
       await this.reservarExistencias(tx, dto.detalle);
 
-      const codigo_traslado = await this.nextCodigoTraslado(tx, 'TRS', 4);
+      const codigo_traslado = await this.nextCodigoTraslado(tx, 'TR', 4);
 
       return tx.traslado.create({
         data: {
