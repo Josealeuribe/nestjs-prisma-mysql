@@ -1,7 +1,11 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DashboardResumenQueryDto } from './dto/dashboard-resumen-query.dto';
 import { DashboardResumenResponseDto } from './dto/dashboard-resumen-response.dto';
+import { DashboardGraficasQueryDto } from './dto/dashboard-graficas-query.dto';
+import { DashboardSeriesResponseDto } from './dto/dashboard-series-response.dto';
+import { DashboardRankingResponseDto } from './dto/dashboard-ranking-response.dto';
 
 interface DashboardAuthUser {
   id_usuario: number;
@@ -79,13 +83,13 @@ export class DashboardService {
       comprasMesActualAgg,
       ordenesCompraPendientes,
       remisionesCompraPendientes,
-      existenciasScope,
       lotesPorVencerRows,
       clientesDesdeCotizaciones,
       clientesDesdeOrdenes,
       clientesDesdeRemisiones,
       proveedoresDesdeCompras,
       trasladosPendientes,
+      productosActivosRows,
     ] = await Promise.all([
       this.prisma.bodega.findMany({
         where: {
@@ -251,24 +255,6 @@ export class DashboardService {
           id_bodega: {
             in: scope.ids_bodegas,
           },
-        },
-        select: {
-          id_producto: true,
-          cantidad: true,
-          cantidad_reservada: true,
-          producto: {
-            select: {
-              estado: true,
-            },
-          },
-        },
-      }),
-
-      this.prisma.existencias.findMany({
-        where: {
-          id_bodega: {
-            in: scope.ids_bodegas,
-          },
           fecha_vencimiento: {
             gte: fechas.hoy,
             lte: fechas.proximos30Dias,
@@ -372,6 +358,26 @@ export class DashboardService {
           ],
         },
       }),
+
+      this.prisma.producto.findMany({
+        where: {
+          estado: true,
+        },
+        select: {
+          id_producto: true,
+          existencias: {
+            where: {
+              id_bodega: {
+                in: scope.ids_bodegas,
+              },
+            },
+            select: {
+              cantidad: true,
+              cantidad_reservada: true,
+            },
+          },
+        },
+      }),
     ]);
 
     const saldoPendienteCobro = facturasPendientes.reduce((acc, factura) => {
@@ -394,40 +400,6 @@ export class DashboardService {
 
       return totalFactura - totalAbonado > 0;
     }).length;
-
-    const stockPorProducto = new Map<number, number>();
-
-    for (const row of existenciasScope) {
-      if (!row.producto?.estado) continue;
-
-      const disponible = Math.max(
-        this.toNumber(row.cantidad) - this.toNumber(row.cantidad_reservada),
-        0,
-      );
-
-      const acumulado = stockPorProducto.get(row.id_producto) ?? 0;
-      stockPorProducto.set(row.id_producto, acumulado + disponible);
-    }
-
-    const productosActivosRows = await this.prisma.producto.findMany({
-      where: {
-        estado: true,
-      },
-      select: {
-        id_producto: true,
-        existencias: {
-          where: {
-            id_bodega: {
-              in: scope.ids_bodegas,
-            },
-          },
-          select: {
-            cantidad: true,
-            cantidad_reservada: true,
-          },
-        },
-      },
-    });
 
     let productosConStock = 0;
     let productosStockBajo = 0;
@@ -513,6 +485,168 @@ export class DashboardService {
       logistica: {
         traslados_pendientes: trasladosPendientes,
       },
+    };
+  }
+
+  async getSeries(
+    query: DashboardGraficasQueryDto,
+    user: DashboardAuthUser,
+  ): Promise<DashboardSeriesResponseDto> {
+    const scope = await this.resolveBodegaScope(user, query.id_bodega);
+    const periodo = query.periodo ?? '6m';
+    const agrupacion = query.agrupacion ?? 'mes';
+
+    const range = this.getChartRange(periodo);
+    const axis = this.buildTimeAxis(range.from, range.toExclusive, agrupacion);
+
+    const bucketExprVentas =
+      agrupacion === 'dia'
+        ? Prisma.sql`DATE_FORMAT(f.fecha_factura, '%Y-%m-%d')`
+        : Prisma.sql`DATE_FORMAT(f.fecha_factura, '%Y-%m')`;
+
+    const bucketExprCompras =
+      agrupacion === 'dia'
+        ? Prisma.sql`DATE_FORMAT(c.fecha_solicitud, '%Y-%m-%d')`
+        : Prisma.sql`DATE_FORMAT(c.fecha_solicitud, '%Y-%m')`;
+
+    const ventasRows = await this.prisma.$queryRaw<
+      Array<{ bucket: string; total: Prisma.Decimal | number | string | null }>
+    >(Prisma.sql`
+      SELECT
+        ${bucketExprVentas} AS bucket,
+        SUM(f.total) AS total
+      FROM factura f
+      WHERE f.id_estado_factura <> ${ESTADOS.FACTURA.ANULADA}
+        AND f.fecha_factura >= ${range.from}
+        AND f.fecha_factura < ${range.toExclusive}
+        AND EXISTS (
+          SELECT 1
+          FROM remision_venta rv
+          INNER JOIN orden_venta ov
+            ON ov.id_orden_venta = rv.id_orden_venta
+          WHERE rv.id_factura = f.id_factura
+            AND ov.id_bodega IN (${Prisma.join(scope.ids_bodegas)})
+        )
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `);
+
+    const comprasRows = await this.prisma.$queryRaw<
+      Array<{ bucket: string; total: Prisma.Decimal | number | string | null }>
+    >(Prisma.sql`
+      SELECT
+        ${bucketExprCompras} AS bucket,
+        SUM(c.total) AS total
+      FROM compras c
+      WHERE c.id_estado_compra <> ${ESTADOS.COMPRA.ANULADA}
+        AND c.id_bodega IN (${Prisma.join(scope.ids_bodegas)})
+        AND c.fecha_solicitud >= ${range.from}
+        AND c.fecha_solicitud < ${range.toExclusive}
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `);
+
+    const ventasMap = new Map(
+      ventasRows.map((row) => [row.bucket, this.toNumber(row.total)]),
+    );
+    const comprasMap = new Map(
+      comprasRows.map((row) => [row.bucket, this.toNumber(row.total)]),
+    );
+
+    return {
+      periodo,
+      agrupacion,
+      labels: axis.map((item) => item.label),
+      ventas: axis.map((item) => ventasMap.get(item.key) ?? 0),
+      compras: axis.map((item) => comprasMap.get(item.key) ?? 0),
+    };
+  }
+
+  async getVentasPorCategoria(
+    query: DashboardGraficasQueryDto,
+    user: DashboardAuthUser,
+  ): Promise<DashboardRankingResponseDto> {
+    const scope = await this.resolveBodegaScope(user, query.id_bodega);
+    const periodo = query.periodo ?? '6m';
+    const range = this.getChartRange(periodo);
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{ label: string | null; total: Prisma.Decimal | number | string | null }>
+    >(Prisma.sql`
+    SELECT
+      COALESCE(
+        cp.nombre_categoria,
+        CONCAT('ID ', p.id_categoria_producto)
+      ) AS label,
+      SUM(drv.cantidad * drv.precio_unitario) AS total
+    FROM detalle_remision_venta drv
+    INNER JOIN remision_venta rv
+      ON rv.id_remision_venta = drv.id_remision_venta
+    INNER JOIN factura f
+      ON f.id_factura = rv.id_factura
+    INNER JOIN orden_venta ov
+      ON ov.id_orden_venta = rv.id_orden_venta
+    INNER JOIN existencias e
+      ON e.id_existencia = drv.id_existencia
+    INNER JOIN producto p
+      ON p.id_producto = e.id_producto
+    LEFT JOIN categoria_producto cp
+      ON cp.id_categoria_producto = p.id_categoria_producto
+    WHERE rv.id_factura IS NOT NULL
+      AND f.id_estado_factura <> ${ESTADOS.FACTURA.ANULADA}
+      AND f.fecha_factura >= ${range.from}
+      AND f.fecha_factura < ${range.toExclusive}
+      AND ov.id_bodega IN (${Prisma.join(scope.ids_bodegas)})
+    GROUP BY
+      COALESCE(
+        cp.nombre_categoria,
+        CONCAT('ID ', p.id_categoria_producto)
+      )
+    ORDER BY total DESC
+    LIMIT 10
+  `);
+
+    return {
+      periodo,
+      items: rows.map((row) => ({
+        label: String(row.label ?? 'Sin categoría'),
+        total: this.toNumber(row.total),
+      })),
+    };
+  }
+
+  async getComprasPorProveedor(
+    query: DashboardGraficasQueryDto,
+    user: DashboardAuthUser,
+  ): Promise<DashboardRankingResponseDto> {
+    const scope = await this.resolveBodegaScope(user, query.id_bodega);
+    const periodo = query.periodo ?? '6m';
+    const range = this.getChartRange(periodo);
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{ label: string | null; total: Prisma.Decimal | number | string | null }>
+    >(Prisma.sql`
+      SELECT
+        COALESCE(p.nombre_empresa, 'Sin proveedor') AS label,
+        SUM(c.total) AS total
+      FROM compras c
+      INNER JOIN proveedor p
+        ON p.id_proveedor = c.id_proveedor
+      WHERE c.id_estado_compra <> ${ESTADOS.COMPRA.ANULADA}
+        AND c.id_bodega IN (${Prisma.join(scope.ids_bodegas)})
+        AND c.fecha_solicitud >= ${range.from}
+        AND c.fecha_solicitud < ${range.toExclusive}
+      GROUP BY COALESCE(p.nombre_empresa, 'Sin proveedor')
+      ORDER BY total DESC
+      LIMIT 10
+    `);
+
+    return {
+      periodo,
+      items: rows.map((row) => ({
+        label: String(row.label ?? 'Sin proveedor'),
+        total: this.toNumber(row.total),
+      })),
     };
   }
 
@@ -604,7 +738,11 @@ export class DashboardService {
       hoy.getDate() + 30,
     );
 
-    const hoySinHora = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    const hoySinHora = new Date(
+      hoy.getFullYear(),
+      hoy.getMonth(),
+      hoy.getDate(),
+    );
 
     return {
       hoy: hoySinHora,
@@ -614,6 +752,109 @@ export class DashboardService {
       manana,
       proximos30Dias,
     };
+  }
+
+  private getChartRange(periodo: '30d' | '3m' | '6m' | '12m' = '6m') {
+    const hoy = new Date();
+    const hoySinHora = new Date(
+      hoy.getFullYear(),
+      hoy.getMonth(),
+      hoy.getDate(),
+    );
+
+    if (periodo === '30d') {
+      const from = new Date(hoySinHora);
+      from.setDate(from.getDate() - 29);
+
+      const toExclusive = new Date(
+        hoySinHora.getFullYear(),
+        hoySinHora.getMonth(),
+        hoySinHora.getDate() + 1,
+      );
+
+      return { from, toExclusive };
+    }
+
+    const monthsBack = periodo === '3m' ? 2 : periodo === '12m' ? 11 : 5;
+
+    const from = new Date(
+      hoySinHora.getFullYear(),
+      hoySinHora.getMonth() - monthsBack,
+      1,
+    );
+
+    const toExclusive = new Date(
+      hoySinHora.getFullYear(),
+      hoySinHora.getMonth() + 1,
+      1,
+    );
+
+    return { from, toExclusive };
+  }
+
+  private buildTimeAxis(
+    from: Date,
+    toExclusive: Date,
+    agrupacion: 'dia' | 'mes',
+  ): Array<{ key: string; label: string }> {
+    const axis: Array<{ key: string; label: string }> = [];
+
+    if (agrupacion === 'dia') {
+      let cursor = new Date(from);
+
+      while (cursor < toExclusive) {
+        const key = this.formatDateOnly(cursor);
+        const label = cursor.toLocaleDateString('es-CO', {
+          day: '2-digit',
+          month: '2-digit',
+        });
+
+        axis.push({ key, label });
+
+        cursor = new Date(
+          cursor.getFullYear(),
+          cursor.getMonth(),
+          cursor.getDate() + 1,
+        );
+      }
+
+      return axis;
+    }
+
+    let cursor = new Date(from.getFullYear(), from.getMonth(), 1);
+
+    while (cursor < toExclusive) {
+      const key = `${cursor.getFullYear()}-${String(
+        cursor.getMonth() + 1,
+      ).padStart(2, '0')}`;
+
+      const label = this.getShortPeriodoLabel(cursor);
+
+      axis.push({ key, label });
+
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+    }
+
+    return axis;
+  }
+
+  private getShortPeriodoLabel(date: Date): string {
+    const meses = [
+      'ene',
+      'feb',
+      'mar',
+      'abr',
+      'may',
+      'jun',
+      'jul',
+      'ago',
+      'sep',
+      'oct',
+      'nov',
+      'dic',
+    ];
+
+    return `${meses[date.getMonth()]} ${date.getFullYear()}`;
   }
 
   private toNumber(value: unknown): number {
