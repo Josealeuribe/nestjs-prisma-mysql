@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsOptional, Min } from 'class-validator';
 
 export class DashboardGraficasQueryDto {
   @IsOptional()
@@ -9,10 +9,14 @@ export class DashboardGraficasQueryDto {
   id_bodega?: number;
 
   @IsOptional()
-  @IsIn(['30d', '3m', '6m', '12m'])
-  periodo?: '30d' | '3m' | '6m' | '12m' = '6m';
+  @IsDateString()
+  fecha_inicio?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fecha_fin?: string;
 
   @IsOptional()
   @IsIn(['dia', 'mes'])
-  agrupacion?: 'dia' | 'mes' = 'mes';
+  agrupacion?: 'dia' | 'mes';
 }

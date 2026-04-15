@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Min } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, Min } from 'class-validator';
 
 export class DashboardResumenQueryDto {
   @IsOptional()
@@ -7,4 +7,12 @@ export class DashboardResumenQueryDto {
   @IsInt()
   @Min(0)
   id_bodega?: number;
+
+  @IsOptional()
+  @IsDateString()
+  fecha_inicio?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fecha_fin?: string;
 }

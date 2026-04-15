@@ -71,16 +71,20 @@ export class DashboardService {
     user: DashboardAuthUser,
   ): Promise<DashboardResumenResponseDto> {
     const scope = await this.resolveBodegaScope(user, query.id_bodega);
-    const fechas = this.getDateRanges();
+    const rango = this.resolveCustomDateRange(
+      query.fecha_inicio,
+      query.fecha_fin,
+    );
+    const fechas = this.getOperationalDates();
 
     const [
       bodegasConsultadas,
-      ventasMesActualAgg,
+      ventasPeriodoAgg,
       cotizacionesPendientes,
       ordenesVentaPendientes,
       remisionesVentaPendientesFacturar,
       facturasPendientes,
-      comprasMesActualAgg,
+      comprasPeriodoAgg,
       ordenesCompraPendientes,
       remisionesCompraPendientes,
       lotesPorVencerRows,
@@ -112,8 +116,8 @@ export class DashboardService {
             not: ESTADOS.FACTURA.ANULADA,
           },
           fecha_factura: {
-            gte: fechas.inicioMes,
-            lt: fechas.inicioMesSiguiente,
+            gte: rango.from,
+            lt: rango.toExclusive,
           },
           remision_venta: {
             some: {
@@ -210,8 +214,8 @@ export class DashboardService {
             not: ESTADOS.COMPRA.ANULADA,
           },
           fecha_solicitud: {
-            gte: fechas.inicioMes,
-            lt: fechas.inicioMesSiguiente,
+            gte: rango.from,
+            lt: rango.toExclusive,
           },
         },
         _sum: {
@@ -455,12 +459,14 @@ export class DashboardService {
         total_bodegas: scope.ids_bodegas.length,
       },
       periodo: {
-        etiqueta: this.getPeriodoLabel(fechas.hoy),
-        fecha_inicio: this.formatDateOnly(fechas.inicioMes),
-        fecha_fin: this.formatDateOnly(fechas.finMes),
+        etiqueta: `${this.formatDateOnly(rango.from)} al ${this.formatDateOnly(
+          rango.endDate,
+        )}`,
+        fecha_inicio: this.formatDateOnly(rango.from),
+        fecha_fin: this.formatDateOnly(rango.endDate),
       },
       ventas: {
-        total_mes_actual: this.toNumber(ventasMesActualAgg._sum.total),
+        total_mes_actual: this.toNumber(ventasPeriodoAgg._sum.total),
         cotizaciones_pendientes: cotizacionesPendientes,
         ordenes_pendientes: ordenesVentaPendientes,
         remisiones_pendientes_facturar: remisionesVentaPendientesFacturar,
@@ -468,7 +474,7 @@ export class DashboardService {
         saldo_pendiente_cobro: saldoPendienteCobro,
       },
       compras: {
-        total_mes_actual: this.toNumber(comprasMesActualAgg._sum.total),
+        total_mes_actual: this.toNumber(comprasPeriodoAgg._sum.total),
         ordenes_pendientes: ordenesCompraPendientes,
         remisiones_pendientes: remisionesCompraPendientes,
       },
@@ -493,19 +499,25 @@ export class DashboardService {
     user: DashboardAuthUser,
   ): Promise<DashboardSeriesResponseDto> {
     const scope = await this.resolveBodegaScope(user, query.id_bodega);
-    const periodo = query.periodo ?? '6m';
-    const agrupacion = query.agrupacion ?? 'mes';
+    const range = this.resolveCustomDateRange(
+      query.fecha_inicio,
+      query.fecha_fin,
+      query.agrupacion,
+    );
 
-    const range = this.getChartRange(periodo);
-    const axis = this.buildTimeAxis(range.from, range.toExclusive, agrupacion);
+    const axis = this.buildTimeAxis(
+      range.from,
+      range.toExclusive,
+      range.agrupacion,
+    );
 
     const bucketExprVentas =
-      agrupacion === 'dia'
+      range.agrupacion === 'dia'
         ? Prisma.sql`DATE_FORMAT(f.fecha_factura, '%Y-%m-%d')`
         : Prisma.sql`DATE_FORMAT(f.fecha_factura, '%Y-%m')`;
 
     const bucketExprCompras =
-      agrupacion === 'dia'
+      range.agrupacion === 'dia'
         ? Prisma.sql`DATE_FORMAT(c.fecha_solicitud, '%Y-%m-%d')`
         : Prisma.sql`DATE_FORMAT(c.fecha_solicitud, '%Y-%m')`;
 
@@ -554,8 +566,10 @@ export class DashboardService {
     );
 
     return {
-      periodo,
-      agrupacion,
+      periodo: `${this.formatDateOnly(range.from)} al ${this.formatDateOnly(
+        range.endDate,
+      )}`,
+      agrupacion: range.agrupacion,
       labels: axis.map((item) => item.label),
       ventas: axis.map((item) => ventasMap.get(item.key) ?? 0),
       compras: axis.map((item) => comprasMap.get(item.key) ?? 0),
@@ -567,47 +581,51 @@ export class DashboardService {
     user: DashboardAuthUser,
   ): Promise<DashboardRankingResponseDto> {
     const scope = await this.resolveBodegaScope(user, query.id_bodega);
-    const periodo = query.periodo ?? '6m';
-    const range = this.getChartRange(periodo);
+    const range = this.resolveCustomDateRange(
+      query.fecha_inicio,
+      query.fecha_fin,
+    );
 
     const rows = await this.prisma.$queryRaw<
       Array<{ label: string | null; total: Prisma.Decimal | number | string | null }>
     >(Prisma.sql`
-    SELECT
-      COALESCE(
-        cp.nombre_categoria,
-        CONCAT('ID ', p.id_categoria_producto)
-      ) AS label,
-      SUM(drv.cantidad * drv.precio_unitario) AS total
-    FROM detalle_remision_venta drv
-    INNER JOIN remision_venta rv
-      ON rv.id_remision_venta = drv.id_remision_venta
-    INNER JOIN factura f
-      ON f.id_factura = rv.id_factura
-    INNER JOIN orden_venta ov
-      ON ov.id_orden_venta = rv.id_orden_venta
-    INNER JOIN existencias e
-      ON e.id_existencia = drv.id_existencia
-    INNER JOIN producto p
-      ON p.id_producto = e.id_producto
-    LEFT JOIN categoria_producto cp
-      ON cp.id_categoria_producto = p.id_categoria_producto
-    WHERE rv.id_factura IS NOT NULL
-      AND f.id_estado_factura <> ${ESTADOS.FACTURA.ANULADA}
-      AND f.fecha_factura >= ${range.from}
-      AND f.fecha_factura < ${range.toExclusive}
-      AND ov.id_bodega IN (${Prisma.join(scope.ids_bodegas)})
-    GROUP BY
-      COALESCE(
-        cp.nombre_categoria,
-        CONCAT('ID ', p.id_categoria_producto)
-      )
-    ORDER BY total DESC
-    LIMIT 10
-  `);
+      SELECT
+        COALESCE(
+          cp.nombre_categoria,
+          CONCAT('ID ', p.id_categoria_producto)
+        ) AS label,
+        SUM(drv.cantidad * drv.precio_unitario) AS total
+      FROM detalle_remision_venta drv
+      INNER JOIN remision_venta rv
+        ON rv.id_remision_venta = drv.id_remision_venta
+      INNER JOIN factura f
+        ON f.id_factura = rv.id_factura
+      INNER JOIN orden_venta ov
+        ON ov.id_orden_venta = rv.id_orden_venta
+      INNER JOIN existencias e
+        ON e.id_existencia = drv.id_existencia
+      INNER JOIN producto p
+        ON p.id_producto = e.id_producto
+      LEFT JOIN categoria_producto cp
+        ON cp.id_categoria_producto = p.id_categoria_producto
+      WHERE rv.id_factura IS NOT NULL
+        AND f.id_estado_factura <> ${ESTADOS.FACTURA.ANULADA}
+        AND f.fecha_factura >= ${range.from}
+        AND f.fecha_factura < ${range.toExclusive}
+        AND ov.id_bodega IN (${Prisma.join(scope.ids_bodegas)})
+      GROUP BY
+        COALESCE(
+          cp.nombre_categoria,
+          CONCAT('ID ', p.id_categoria_producto)
+        )
+      ORDER BY total DESC
+      LIMIT 10
+    `);
 
     return {
-      periodo,
+      periodo: `${this.formatDateOnly(range.from)} al ${this.formatDateOnly(
+        range.endDate,
+      )}`,
       items: rows.map((row) => ({
         label: String(row.label ?? 'Sin categoría'),
         total: this.toNumber(row.total),
@@ -620,8 +638,10 @@ export class DashboardService {
     user: DashboardAuthUser,
   ): Promise<DashboardRankingResponseDto> {
     const scope = await this.resolveBodegaScope(user, query.id_bodega);
-    const periodo = query.periodo ?? '6m';
-    const range = this.getChartRange(periodo);
+    const range = this.resolveCustomDateRange(
+      query.fecha_inicio,
+      query.fecha_fin,
+    );
 
     const rows = await this.prisma.$queryRaw<
       Array<{ label: string | null; total: Prisma.Decimal | number | string | null }>
@@ -642,7 +662,9 @@ export class DashboardService {
     `);
 
     return {
-      periodo,
+      periodo: `${this.formatDateOnly(range.from)} al ${this.formatDateOnly(
+        range.endDate,
+      )}`,
       items: rows.map((row) => ({
         label: String(row.label ?? 'Sin proveedor'),
         total: this.toNumber(row.total),
@@ -714,47 +736,31 @@ export class DashboardService {
     };
   }
 
-  private getDateRanges() {
+  private getOperationalDates() {
     const hoy = new Date();
-
-    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    const inicioMesSiguiente = new Date(
-      hoy.getFullYear(),
-      hoy.getMonth() + 1,
-      1,
-    );
-
-    const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
-
-    const manana = new Date(
-      hoy.getFullYear(),
-      hoy.getMonth(),
-      hoy.getDate() + 1,
-    );
-
-    const proximos30Dias = new Date(
-      hoy.getFullYear(),
-      hoy.getMonth(),
-      hoy.getDate() + 30,
-    );
-
     const hoySinHora = new Date(
       hoy.getFullYear(),
       hoy.getMonth(),
       hoy.getDate(),
+    );
+
+    const proximos30Dias = new Date(
+      hoySinHora.getFullYear(),
+      hoySinHora.getMonth(),
+      hoySinHora.getDate() + 30,
     );
 
     return {
       hoy: hoySinHora,
-      inicioMes,
-      inicioMesSiguiente,
-      finMes,
-      manana,
       proximos30Dias,
     };
   }
 
-  private getChartRange(periodo: '30d' | '3m' | '6m' | '12m' = '6m') {
+  private resolveCustomDateRange(
+    fechaInicio?: string,
+    fechaFin?: string,
+    agrupacion?: 'dia' | 'mes',
+  ) {
     const hoy = new Date();
     const hoySinHora = new Date(
       hoy.getFullYear(),
@@ -762,34 +768,49 @@ export class DashboardService {
       hoy.getDate(),
     );
 
-    if (periodo === '30d') {
-      const from = new Date(hoySinHora);
-      from.setDate(from.getDate() - 29);
+    const inicioDefault = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const finDefault = hoySinHora;
 
-      const toExclusive = new Date(
-        hoySinHora.getFullYear(),
-        hoySinHora.getMonth(),
-        hoySinHora.getDate() + 1,
-      );
+    const from = fechaInicio
+      ? new Date(`${fechaInicio}T00:00:00`)
+      : inicioDefault;
 
-      return { from, toExclusive };
+    const endDate = fechaFin
+      ? new Date(`${fechaFin}T00:00:00`)
+      : finDefault;
+
+    if (
+      Number.isNaN(from.getTime()) ||
+      Number.isNaN(endDate.getTime())
+    ) {
+      throw new ForbiddenException('Las fechas enviadas no son válidas');
     }
 
-    const monthsBack = periodo === '3m' ? 2 : periodo === '12m' ? 11 : 5;
-
-    const from = new Date(
-      hoySinHora.getFullYear(),
-      hoySinHora.getMonth() - monthsBack,
-      1,
-    );
+    if (from > endDate) {
+      throw new ForbiddenException(
+        'La fecha inicial no puede ser mayor que la fecha final',
+      );
+    }
 
     const toExclusive = new Date(
-      hoySinHora.getFullYear(),
-      hoySinHora.getMonth() + 1,
-      1,
+      endDate.getFullYear(),
+      endDate.getMonth(),
+      endDate.getDate() + 1,
     );
 
-    return { from, toExclusive };
+    const diffMs = endDate.getTime() - from.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+
+    const agrupacionFinal =
+      agrupacion ?? (diffDays <= 45 ? 'dia' : 'mes');
+
+    return {
+      from,
+      endDate,
+      toExclusive,
+      diffDays,
+      agrupacion: agrupacionFinal,
+    };
   }
 
   private buildTimeAxis(
@@ -864,24 +885,5 @@ export class DashboardService {
 
   private formatDateOnly(value: Date): string {
     return value.toISOString().slice(0, 10);
-  }
-
-  private getPeriodoLabel(date: Date): string {
-    const meses = [
-      'enero',
-      'febrero',
-      'marzo',
-      'abril',
-      'mayo',
-      'junio',
-      'julio',
-      'agosto',
-      'septiembre',
-      'octubre',
-      'noviembre',
-      'diciembre',
-    ];
-
-    return `${meses[date.getMonth()]} ${date.getFullYear()}`;
   }
 }
